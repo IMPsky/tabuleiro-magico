@@ -193,7 +193,7 @@ function setAvatar(file){
 function renderCombosPage(P){
   const range=(a,b,u="")=>a===b?`${a}${u}`:`${a} a ${b}${u}`;
   const card=k=>{ const E=EFFECTS[k], c=EFFECT_COST[k]||[5,8,[20,30,45]];
-    return `<div class="combo-card"><div class="cc-head"><h3>${esc(E.name)}</h3>${E.element?`<i class="eldot" style="background:${ELEMENTS[E.element].hex}"></i>`:""}</div>
+    return `<div class="combo-card"><div class="cc-head"><h3>${E.emoji?`<span class="emo">${E.emoji}</span> `:""}${esc(E.name)}</h3></div>
       <p style="margin:0">${E.txt(RULES)}</p>
       <div class="cc-meta"><span class="chip">Alvo: ${TARGET_TXT[E.target]}</span><span class="chip">Mana: ${range(c[0],c[1])}</span><span class="chip">Intervalo: ${range(Math.min(...c[2]),Math.max(...c[2])," s")}</span></div></div>`; };
   const base=Object.keys(EFFECTS).filter(k=>!EFFECTS[k].element), els=Object.keys(EFFECTS).filter(k=>EFFECTS[k].element);
@@ -273,15 +273,15 @@ document.getElementById("panel").addEventListener("input", e => { if(me && view=
 const NATIVE = !!window.Capacitor?.isNativePlatform?.();
 const Link = NATIVE ? (window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin("Link") : window.Capacitor.Plugins.Link) : makeSimLink();
 /* host: peers = {idDaConexão:{name, side, addr, connected}}; roster = jogadores na sala de espera */
-const NET = {role:null, via:null, mode:"1x1", connected:false, room:null, peers:{}, roster:[], offset:0, lastJoin:null, stage:null, roomInfo:null, sentFriend:new Set()};
-const PROTO = 3;
+const NET = {role:null, via:null, mode:"1x1", connected:false, room:null, peers:{}, roster:[], offset:0, lastJoin:null, stage:null, roomInfo:null, sentFriend:new Set(), opLog:[], opSeqs:new Set()};
+const PROTO = 4;
 let btFound = [];
 const needPlayers = mode => mode==="2x2" ? 4 : 2;
 async function netSend(msg,peer){ try{ await Link.send(peer?{data:JSON.stringify(msg),peer}:{data:JSON.stringify(msg)}); }catch(e){ /* quem caiu é tratado no evento de desconexão */ } }
 function forward(msg,exceptPeer){ for(const [id,p] of Object.entries(NET.peers)) if(id!==exceptPeer && p.connected) netSend(msg,id); }
 function peerByName(name){ return Object.entries(NET.peers).find(([id,p])=>p.connected&&keyOf(p.name)===keyOf(name))?.[0]; }
 function netOk(){ if(!G||!G.net) return true; if(NET.role==="guest") return NET.connected; return G.mode==="2x2" || Object.values(NET.peers).some(p=>p.connected&&p.side); }
-async function netClose(){ try{ await Link.close(); }catch(e){} Object.assign(NET,{role:null,via:null,connected:false,room:null,peers:{},roster:[],offset:0,stage:null,roomInfo:null,sentFriend:new Set()}); $("#netOverlay").hidden=true; }
+async function netClose(){ try{ await Link.close(); }catch(e){} Object.assign(NET,{role:null,via:null,connected:false,room:null,peers:{},roster:[],offset:0,stage:null,roomInfo:null,sentFriend:new Set(),opLog:[],opSeqs:new Set()}); $("#netOverlay").hidden=true; }
 function netCard(html){ $("#netCard").innerHTML=html; $("#netOverlay").hidden=false; }
 document.getElementById("netCard").addEventListener("click", e => { const b=e.target.closest("[data-net]"); if(!b) return; const a=b.dataset.net;
   if(a==="cancel"){ netClose(); }
@@ -401,7 +401,12 @@ function onHostMsg(m,peer){
     if(NET.mode==="1x1") startNetSeries();
   }
   else if(m.t==="imgs" && G && P.side){ IMGS[P.side]=sanitizeImgs(m.imgs); forward({t:"imgs",side:P.side,imgs:IMGS[P.side]},peer); renderBoard(); }
-  else if(m.t==="state" && G && G.net && m.g && m.g.roomId===G.roomId && (m.g.seq||0)>(G.seq||0)){ applyRemote(m.g); forward({t:"state",g:m.g},peer); }
+  else if(m.t==="op" && m.op==="fuse" && G && P.side && m.side===P.side && Array.isArray(m.ids) && m.ids.length===3){ hostFuse(m.side,+m.i,m.ids.map(String)); }
+  else if(m.t==="state" && G && G.net && m.g && m.g.roomId===G.roomId){
+    if((m.g.seq||0)>(G.seq||0)){ applyRemote(m.g); forward({t:"state",g:m.g},peer); }
+    else { // a jogada veio de uma versão sem as fusões feitas fora da vez: reaplica essas fusões em cima dela
+      let ok=true; for(let q=m.g.seq; q<=G.seq; q++) if(!NET.opSeqs.has(q)) ok=false;
+      if(ok){ const g=clone(m.g); for(const o of NET.opLog) if(o.seq>=m.g.seq) applyFuse(g,o.side,o.i,o.ids); g.seq=G.seq+1; applyRemote(g); forward({t:"state",g}); } } }
   else if(m.t==="friend"||m.t==="friendOk"){
     if(keyOf(m.to)===me.key) onFriendMsg(m, {ip:NET.via==="tcp"?P.addr:null, bt:NET.via==="bt"?P.addr:null});
     else { const to=peerByName(m.to); if(to) netSend(m,to); }
@@ -525,6 +530,17 @@ async function commit(fn){
     if(g.net){ await netSend({t:"state",g}); if(g.status==="finished"&&was!=="finished") onFinished(); }
   } finally { busy=false; }
 }
+/* fusão: na própria vez (ou contra a IA) aplica direto; fora da vez, quem criou a sala aplica e repassa */
+async function commitRetry(fn){ for(let i=0;i<80&&busy;i++) await wait(40); return commit(fn); }
+async function fuseNow(side,i,ids){
+  if(!G.net || G.turn===side){ await commitRetry(g=>applyFuse(g,side,i,ids)); return; }
+  if(NET.role==="host") return hostFuse(side,i,ids);
+  netSend({t:"op",op:"fuse",side,i,ids});
+}
+async function hostFuse(side,i,ids){
+  const before=G.seq; await commitRetry(g=>applyFuse(g,side,i,ids));
+  if(G.seq>before){ NET.opLog.push({seq:G.seq,side,i,ids}); NET.opSeqs.add(G.seq); if(NET.opLog.length>60) NET.opLog.shift(); }
+}
 $("#gPass").onclick = () => { if(!isMyTurn()) return toast("Espere a sua vez."); const tn=G.turnNo; commit((g,now)=>{ if(g.turnNo!==tn) return false; endTurn(g,now,"passou"); }); };
 $("#gQuit").onclick = () => { if(G?.status==="playing" && mySide && !G.out?.[mySide]) $("#confirmQuit").hidden=false; };
 $("#cqNo").onclick = () => $("#confirmQuit").hidden=true;
@@ -564,7 +580,7 @@ setInterval(()=>{
   const iDecide = mine || !G.net || G.mode==="1x1" || NET.role==="host";
   if(late && iDecide && !timeoutSent[key]){ timeoutSent[key]=1; commit((g,n)=>{ if(g.turnNo!==tn||g.status!=="playing") return false; endTurn(g,n,"tempo"); }); }
 },500);
-setInterval(()=>{ if(G && !$("#scr-game").hidden){ renderBoard(); renderCards(); renderExplain(); } },1000);
+setInterval(()=>{ if(G && !$("#scr-game").hidden){ renderBoard(); renderCards(); renderExplain(); renderScrolls(); } },1000);
 
 /*@@GAME_CORE@@*/
 
@@ -574,5 +590,5 @@ setInterval(()=>{ if(G && !$("#scr-game").hidden){ renderBoard(); renderCards();
   await loadStore();
   if(STORE.session && STORE.accounts[STORE.session]) enter(STORE.accounts[STORE.session]);
   if(!NATIVE) console.info("Tabuleiro Mágico: modo navegador — a conexão é simulada entre abas.");
-  if(!NATIVE) window.__tm = { G:()=>G, commit, endRound, cdLeft, pieceCd, gnow, myArsenal };
+  if(!NATIVE) window.__tm = { G:()=>G, V:()=>V(), commit, endRound, cdLeft, pieceCd, gnow, myArsenal };
 })();

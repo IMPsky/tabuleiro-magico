@@ -10,7 +10,10 @@ Jogo de duelo em tabuleiro 8×8 para Android. Funciona sem internet:
 - **Núcleo.** Pode andar quantas casas o dado Andar mandar.
 - **Mana.** Cada duelista começa com 200.
 - **Pergaminho de feitiço.** Aparece no centro do tabuleiro depois de 5 minutos, depois de mais 10, de mais 15 e assim por diante. Quem pisar nele ganha um efeito pronto.
-- **Campo elemental.** Pinta o tabuleiro com a cor de um elemento e dá +2 de dano às placas desse elemento.
+- **Campo elemental.** Transforma o chão no terreno do elemento (lava, água, gelo, terra, grama, tempestade, vento, luz ou trevas), com animação, e dá +2 de dano às placas desse elemento.
+- **Necromancia.** Levanta qualquer lápide (sua ou do inimigo) para lutar do seu lado, com 2 de vida, por 5 minutos.
+- **Árvore da vida.** Cura 6 de vida das placas ao redor a cada 4 minutos e dura 10 minutos. A imagem fica em `src/img/arvore.png`.
+- **Fusão a qualquer hora.** Os cristais podem ser combinados também na vez do adversário. Quando um pergaminho volta com um efeito ainda em recarga, a contagem regressiva aparece em cima dele.
 - **Sons e efeitos.** Tem som de cristal, brilho quando uma combinação dá certo, número de dano nos ataques e a vida descendo. O nome de cada placa aparece sobre ela.
 - **Informação oculta.** Cada jogador vê só a própria mana e a vida do próprio núcleo.
 - **Sala por IP (Wi-Fi).** Quem cria a sala vê o IP do aparelho (ex.: `192.168.0.12`). Os outros digitam esse IP em **Jogar → Entrar pelo IP**. Todos precisam estar no mesmo Wi-Fi ou no hotspot de quem criou a sala.

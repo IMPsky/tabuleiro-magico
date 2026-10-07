@@ -187,7 +187,7 @@ td input{width:70px;background:var(--bg2);border:1px solid var(--line);border-ra
 .cell .hp{position:absolute;left:10%;right:10%;bottom:4%;height:5px;background:#0005;border-radius:3px;overflow:hidden}
 .cell .hp i{display:block;height:100%;background:var(--ok)}
 .cell .hp i.mid{background:var(--warn)} .cell .hp i.low{background:var(--bad)}
-.cell .el{position:absolute;top:3%;right:3%;width:30%;max-width:18px;aspect-ratio:1;border-radius:50%;border:1.5px solid #fff;box-shadow:0 0 0 1px #0006}
+.cell .el{position:absolute;top:2%;right:0;font-size:clamp(10px,3vw,16px);line-height:1;filter:drop-shadow(0 0 3px var(--elc)) drop-shadow(0 1px 1px #000);z-index:2}
 .cell .seal{position:absolute;inset:6%;border:2px dashed #7b3fc0;border-radius:6px;display:grid;place-items:start center}
 .cell .seal span{background:#7b3fc0;color:#fff;font-size:10px;font-weight:800;border-radius:4px;padding:0 4px;transform:translateY(-55%)}
 .cell .cd{position:absolute;top:2%;left:3%;font-size:10px;font-weight:800;color:#fff;background:#000a;border-radius:4px;padding:0 3px}
@@ -304,3 +304,47 @@ td input{width:70px;background:var(--bg2);border:1px solid var(--line);border-ra
 .plate-card.special{border-style:dashed}
 .plate-card.special .plate-img{color:var(--gold)}
 @media (prefers-reduced-motion:reduce){.floattxt,.cell.hit,.cell .spell{animation:none!important}}
+
+/* --- emojis, recarga no pergaminho, mortos-vivos e árvore --- */
+.emo{font-family:"Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif}
+.fieldpick .btn .emo{font-size:16px}
+.scroll{position:relative}
+.scroll .cdbadge{position:absolute;top:2px;right:6%;background:#14213fee;color:var(--gold2);font-weight:800;font-size:12px;padding:2px 7px;border-radius:99px;border:1px solid var(--gold);font-variant-numeric:tabular-nums;box-shadow:0 2px 6px #0007}
+.scroll .cdbadge.paused{color:#cfd7ea;border-color:#8796b8}
+.scroll.cooling .in{opacity:.6}
+.cell .pc.undead{filter:hue-rotate(220deg) saturate(1.4) drop-shadow(0 0 5px #a36bff)}
+.cell .pc.undead .ptag{background:#4a237add}
+.cell.necrofx::after{content:"";position:absolute;inset:0;background:radial-gradient(circle,#e6d4ff 0,#7b3fc0 45%,transparent 70%);opacity:0;animation:hitflash .9s}
+.cell .tree{position:absolute;inset:4%;display:grid;place-items:center;filter:drop-shadow(0 3px 4px #0008);animation:treesway 3s ease-in-out infinite;transform-origin:50% 90%}
+.cell .tree img{width:100%;height:100%;object-fit:cover;border-radius:50%;box-shadow:0 0 0 2px #ffd2e6,0 0 10px #ff9fd0aa}
+@keyframes treesway{50%{transform:rotate(2.5deg) scale(1.03)}}
+/* --- campos elementais animados --- */
+.board.field{position:relative;background-color:#222}
+.board.field .cell{background:rgba(255,255,255,.07)!important}
+.board.field .cell.dk{background:rgba(0,0,0,.16)!important}
+.board.field-fogo{background:radial-gradient(circle at 20% 30%,#ffe36e 0 3%,transparent 9%),radial-gradient(circle at 70% 65%,#ffb02e 0 4%,transparent 12%),radial-gradient(circle at 45% 85%,#ff7a1a 0 5%,transparent 14%),radial-gradient(ellipse at 50% 50%,#ff5a1f 0,#b3240c 45%,#4a0b04 100%);background-size:110px 110px,140px 140px,170px 170px,100% 100%;animation:lava 9s linear infinite}
+@keyframes lava{to{background-position:110px -110px,-140px 140px,170px 170px,0 0}}
+.board.field-agua{background:repeating-radial-gradient(circle at 30% 40%,#8fd3ff 0 2px,transparent 3px 22px),repeating-radial-gradient(circle at 75% 70%,#bfe8ff 0 2px,transparent 3px 26px),linear-gradient(180deg,#1f78c9,#0b3f80);background-size:200% 200%,200% 200%,100% 100%;animation:waves 7s ease-in-out infinite alternate}
+@keyframes waves{to{background-position:30% 20%,-20% 30%,0 0}}
+.board.field-gelo{background:repeating-linear-gradient(32deg,transparent 0 38px,#ffffffaa 39px 40px,transparent 41px 70px),repeating-linear-gradient(-58deg,transparent 0 52px,#ffffff88 53px 54px,transparent 55px 90px),linear-gradient(135deg,#e9f9ff,#9fdcf5 50%,#c9f0ff);animation:icy 4s ease-in-out infinite}
+@keyframes icy{50%{filter:brightness(1.12) saturate(1.15)}}
+.board.field-terra{background:radial-gradient(circle at 20% 20%,#5b3a1c 0 4px,transparent 5px),radial-gradient(circle at 70% 60%,#3f2812 0 6px,transparent 7px),radial-gradient(circle at 40% 80%,#a0784c 0 3px,transparent 4px),linear-gradient(135deg,#8a5a2b,#6b431f 50%,#9b6a37);background-size:47px 47px,73px 73px,31px 31px,100% 100%;animation:quake 5s ease-in-out infinite}
+@keyframes quake{92%{transform:none}94%{transform:translateX(-2px)}96%{transform:translateX(2px)}98%{transform:translateX(-1px)}}
+.board.field-planta{background:repeating-linear-gradient(95deg,#2f8f3a 0 3px,#3faa47 3px 7px,#27782f 7px 10px),linear-gradient(180deg,#3aa143,#1f6a28);background-size:40px 100%,100% 100%;animation:grass 3s ease-in-out infinite alternate}
+@keyframes grass{to{background-position:6px 0,0 0}}
+.board.field-raio{background:linear-gradient(115deg,transparent 0 46%,#fff27a 47% 48%,transparent 49%),linear-gradient(65deg,transparent 0 60%,#ffe94d 61% 62%,transparent 63%),radial-gradient(circle at 50% 40%,#5b3ca8,#22114f 70%);background-size:160px 160px,200px 200px,100% 100%;animation:storm 2.4s steps(1) infinite}
+@keyframes storm{0%,100%{filter:brightness(1)}8%{filter:brightness(1.8)}10%{filter:brightness(1)}52%{filter:brightness(1.5)}54%{filter:brightness(1)}}
+.board.field-vento{background:repeating-linear-gradient(170deg,transparent 0 26px,#ffffff66 27px 29px,transparent 30px 60px),linear-gradient(180deg,#bfeee0,#7fcfb9);background-size:300px 300px,100% 100%;animation:wind 3s linear infinite}
+@keyframes wind{to{background-position:300px 0,0 0}}
+.board.field-luz{background:repeating-conic-gradient(from 0deg at 50% 50%,#fff6c2 0 10deg,#ffd75e 10deg 20deg),radial-gradient(circle,#fffbe6,#ffcf61);background-blend-mode:soft-light;animation:shine 3s ease-in-out infinite}
+@keyframes shine{50%{filter:brightness(1.18)}}
+.board.field-trevas{background:radial-gradient(circle at 30% 30%,#6b3fa0aa 0,transparent 30%),radial-gradient(circle at 70% 70%,#2b0f4daa 0,transparent 35%),linear-gradient(135deg,#140822,#2c1450 50%,#0b0414);background-size:200% 200%,200% 200%,100% 100%;animation:fog 8s ease-in-out infinite alternate}
+@keyframes fog{to{background-position:100% 60%,0 30%,0 0}}
+.fieldfx{position:absolute;inset:6px;pointer-events:none;overflow:hidden;border-radius:4px;z-index:3}
+.fieldfx span{position:absolute;bottom:-12%;font-size:clamp(12px,3.4vw,20px);opacity:0;animation:rise 5s linear infinite;font-family:"Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif}
+@keyframes rise{0%{opacity:0;transform:translateY(0)}15%{opacity:.85}80%{opacity:.6}100%{opacity:0;transform:translateY(-110%) rotate(20deg)}}
+.fieldfx.fx-agua span,.fieldfx.fx-gelo span,.fieldfx.fx-trevas span{animation-name:fall;bottom:auto;top:-12%}
+@keyframes fall{0%{opacity:0;transform:translateY(0)}15%{opacity:.85}100%{opacity:0;transform:translateY(110%)}}
+.fieldfx.fx-vento span{animation-name:drift;bottom:auto}
+@keyframes drift{0%{opacity:0;transform:translate(-30vw,0)}20%{opacity:.8}100%{opacity:0;transform:translate(60vw,-20px)}}
+@media (prefers-reduced-motion:reduce){.board.field,.fieldfx span,.cell .tree{animation:none!important}}

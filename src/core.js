@@ -28,13 +28,16 @@ function cdLeft(g,side,eff,now){ let rem=g.cds[side][eff]||0; if(rem>0 && runsFo
 const at = (g,r,c) => g.pieces.find(p=>p.r===r&&p.c===c);
 const structAt = (g,r,c) => g.structures.find(s=>s.r===r&&s.c===c);
 const trapAt = (g,r,c) => g.traps.find(t=>t.r===r&&t.c===c);
+const treeAt = (g,r,c) => (g.trees||[]).find(t=>t.r===r&&t.c===c);
+const spellAt = (g,r,c) => g.spell && g.spell.r===r && g.spell.c===c;
+const emptyCell = (g,r,c) => !at(g,r,c)&&!structAt(g,r,c)&&!trapAt(g,r,c)&&!treeAt(g,r,c)&&!spellAt(g,r,c);
 const D8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
 function moveTargets(g,p){
   const out=new Map(); const d=g.dice.andar; const st=statOf(p);
   if(!d.v||d.used||p.dead||p.sealHp>0||st.andar<=0) return out;
   const lim=Math.min(d.v,st.andar); const seen=new Map([[p.r+","+p.c,null]]); let fr=[[p.r,p.c]];
   for(let s=0;s<lim;s++){ const nx=[]; for(const [r,c] of fr) for(const [dr,dc] of D8){ const R=r+dr,C=c+dc,k=R+","+C;
-      if(R<0||R>7||C<0||C>7||seen.has(k)||at(g,R,C)||structAt(g,R,C)) continue; const tr=trapAt(g,R,C); if(tr&&tr.owner===p.owner) continue;
+      if(R<0||R>7||C<0||C>7||seen.has(k)||at(g,R,C)||structAt(g,R,C)||treeAt(g,R,C)) continue; const tr=trapAt(g,R,C); if(tr&&tr.owner===p.owner) continue;
       seen.set(k,r+","+c); nx.push([R,C]); out.set(k,true); } fr=nx; }
   for(const k of out.keys()){ const path=[]; let cur=k; while(cur && cur!==p.r+","+p.c){ path.unshift(cur.split(",").map(Number)); cur=seen.get(cur); } out.set(k,path); }
   return out;
@@ -74,18 +77,22 @@ function eliminate(g,side,why){
 }
 function kill(g,p){
   if(p.type==="nucleo"){ p.hp=0; eliminate(g,p.owner,`O Núcleo de ${g.players[p.owner].name} foi destruído!`); return; }
+  if(p.undead){ p.owner=p.undead.owner; p.undead=null; }
   p.dead=true; p.hp=0; p.sealHp=0; p.element=null; addLog(g,`${pname(p)} de ${g.players[p.owner].name} caiu e virou lápide.`);
 }
 /* ---- pergaminho de feitiço que aparece no centro do tabuleiro ---- */
 function spawnSpell(g,now){
   g.spellN=(g.spellN||0)+1; g.spellNext=now+g.rules.feiticoMin*60000*(g.spellN+1);
   if(g.spell) return false;
-  const free=(r,c)=>!at(g,r,c)&&!structAt(g,r,c)&&!trapAt(g,r,c);
-  let cells=[[3,3],[3,4],[4,3],[4,4]].filter(([r,c])=>free(r,c));
-  if(!cells.length){ for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(free(r,c)) cells.push([r,c]); cells.sort((a,b)=>cheb(a[0],a[1],3.5,3.5)-cheb(b[0],b[1],3.5,3.5)); cells=cells.slice(0,4); }
+  // procura a casa vazia mais longe de todas as placas (empate: a mais perto do centro)
+  const alive=g.pieces.filter(p=>!p.dead); let best=-1, cells=[];
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){ if(!emptyCell(g,r,c)) continue;
+    const d=alive.length?Math.min(...alive.map(p=>Math.max(Math.abs(p.r-r),Math.abs(p.c-c)))):8;
+    const score=d*10-Math.abs(r-3.5)-Math.abs(c-3.5);
+    if(score>best+0.01){ best=score; cells=[[r,c]]; } else if(Math.abs(score-best)<=0.01) cells.push([r,c]); }
   if(!cells.length) return false;
   const [r,c]=cells[Math.floor(Math.random()*cells.length)], cb=pick(g.combos);
-  g.spell={r,c,comboId:cb.id}; addLog(g,"Um pergaminho de feitiço apareceu no centro do tabuleiro! Pise nele para ganhar um efeito pronto.");
+  g.spell={r,c,comboId:cb.id}; addLog(g,"Um pergaminho de feitiço apareceu no tabuleiro! Pise nele para ganhar um efeito pronto.");
   fx(g,{k:"spell",to:[r,c]}); return true;
 }
 function pickupSpell(g,side,p){
@@ -126,7 +133,9 @@ function effectTargets(g,eff,side){
   const near=(r,c)=>mine.some(p=>cheb(p.r,p.c,r,c)===1);
   if(E.target==="ownPiece") for(const p of mine){ if(p.type==="nucleo"&&!E.core) continue; out.add(p.r+","+p.c); }
   if(E.target==="ownTomb") for(const p of g.pieces) if(p.owner===side&&p.dead&&p.type!=="nucleo") out.add(p.r+","+p.c);
-  if(E.target==="emptyNearOwn") for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(!at(g,r,c)&&!structAt(g,r,c)&&!trapAt(g,r,c)&&!(g.spell&&g.spell.r===r&&g.spell.c===c)&&near(r,c)) out.add(r+","+c);
+  if(E.target==="emptyNearOwn") for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(emptyCell(g,r,c)&&near(r,c)) out.add(r+","+c);
+  if(E.target==="emptyAny") for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(emptyCell(g,r,c)) out.add(r+","+c);
+  if(E.target==="anyTomb") for(const p of g.pieces) if(p.dead&&p.type!=="nucleo"&&!g.out[p.owner]) out.add(p.r+","+p.c);
   if(E.target==="enemyNearOwn") for(const p of g.pieces) if(isEnemy(g,p.owner,side)&&!p.dead&&p.type!=="nucleo"&&!p.sealHp&&near(p.r,p.c)) out.add(p.r+","+p.c);
   return out;
 }
@@ -149,11 +158,24 @@ function useScroll(i,r,c,side=mySide,el=null){
     else if(s.effect==="estrutura"){ g.structures.push({id:uidStr(),owner:mySide,r,c,hp:R.estruturaVida,maxHp:R.estruturaVida}); addLog(g,`${me_} ergueu uma estrutura.`); }
     else if(s.effect==="selamento"){ p.sealHp=R.seloVida; addLog(g,`${me_} selou ${pname(p)}.`); }
     else if(s.effect==="recMana"){ g.timed.push({kind:"mana",owner:mySide,start:now,every:1000,total:R.recManaSeg,amt:R.recManaQtd,done:0}); addLog(g,`${me_} ativou Recuperação de mana.`); }
-    else if(s.effect==="recVida"){ g.timed.push({kind:"vida",owner:mySide,start:now,every:60000,total:R.recVidaMin,amt:R.recVidaQtd,done:0}); addLog(g,`${me_} ativou Recuperação de vida no núcleo.`); }
-    else if(s.effect==="campo"){ g.field={el,by:mySide}; addLog(g,`${me_} criou um Campo de ${ELEMENTS[el].name}: placas de ${ELEMENTS[el].name} causam +${R.bonusCampo} de dano.`); }
-    else if(E.element){ p.element=E.element; addLog(g,`${pname(p)} recebeu o elemento ${ELEMENTS[E.element].name}.`); }
+    else if(s.effect==="recVida"){ g.timed.push({kind:"vida",owner:mySide,start:now,every:R.recVidaSeg*1000,total:Math.round(R.recVidaDur/R.recVidaSeg),amt:R.recVidaQtd,done:0}); addLog(g,`${me_} ativou Recuperação de vida no núcleo.`); }
+    else if(s.effect==="necromancia"){ const was=p.owner; p.undead={owner:was,until:now+R.necroMin*60000}; p.owner=mySide; p.dead=false; p.hp=Math.min(R.necroVida,p.maxHp); p.cd=0; p.sealHp=0; p.element=null;
+      addLog(g,`💀 ${me_} usou Necromancia: ${pname(p)}${was!==mySide?` de ${g.players[was].name}`:""} levantou com ${p.hp} de vida por ${R.necroMin} minutos.`); fx(g,{k:"necro",to:[r,c]}); }
+    else if(s.effect==="arvore"){ (g.trees ||= []).push({id:uidStr(),owner:mySide,r,c,start:now,until:now+R.arvoreMin*60000,done:0}); addLog(g,`🌳 ${me_} plantou uma Árvore da vida.`); fx(g,{k:"heal",to:[r,c],amt:0}); }
+    else if(s.effect==="campo"){ g.field={el,by:mySide}; addLog(g,`${ELEMENTS[el].emoji} ${me_} criou um Campo de ${ELEMENTS[el].name}: placas de ${ELEMENTS[el].name} causam +${R.bonusCampo} de dano.`); }
+    else if(E.element){ p.element=E.element; addLog(g,`${ELEMENTS[E.element].emoji} ${pname(p)} recebeu o elemento ${ELEMENTS[E.element].name}.`); }
     g.mana[mySide]-=s.mana; g.cds[mySide][s.effect]=(s.cd||0)*1000; g.scrolls[mySide][i]={state:"empty"};
   });
+}
+
+/* fusão de cristais: pode acontecer na vez de qualquer um */
+function applyFuse(g,side,i,ids){
+  const cost=g.rules.custoCristal, sc=g.scrolls[side]?.[i]; if(!sc||sc.state==="ready"||g.status!=="playing"||g.out[side]) return false;
+  if(g.mana[side]<3*cost) return false; g.mana[side]-=3*cost;
+  const k=[...ids].sort().join("|"), cb=g.combos.find(c=>[c.c1,c.c2,c.c3].sort().join("|")===k);
+  g.scrolls[side][i] = cb ? {state:"ready",c:ids,comboId:cb.id,effect:cb.effect,mana:cb.mana,cd:cb.cooldown} : {state:"fail",c:ids};
+  if(cb && !g.found[side].includes(cb.id)) g.found[side].push(cb.id);
+  addLog(g, cb?`${g.players[side].name} fundiu 3 cristais num pergaminho.`:`${g.players[side].name} fundiu 3 cristais, mas a combinação não existe.`);
 }
 
 /* ================= série, duelos e turnos ================= */
@@ -171,7 +193,7 @@ function startRound(g,now){
   const first = g.order[(g.series.round-1)%g.order.length];
   const per = v => Object.fromEntries(g.order.map(s=>[s,typeof v==="function"?v(s):clone(v)]));
   Object.assign(g,{status:"playing",winner:null,turn:first,turnNo:1,turnStartedAt:now,turnEndsAt:now+g.turnSec*1000+2000,dice:freshDice(),
-    structures:[],traps:[],timed:[],field:null,spell:null,spellN:0,spellNext:now+g.rules.feiticoMin*60000,out:{},
+    structures:[],traps:[],timed:[],trees:[],field:null,spell:null,spellN:0,spellNext:now+g.rules.feiticoMin*60000,out:{},
     mana:per(g.rules.manaBase),manaMax:per(g.rules.manaBase),scrolls:per([{state:"empty"},{state:"empty"},{state:"empty"}]),cds:per({}),fx:{seq:(g.fx?.seq||0)+1,items:[]}});
   g.pieces=buildPieces(g);
   g.log=[{t:Date.now(),x:`Duelo ${g.series.round} da série. ${g.players[first].name} começa.`}];
@@ -200,7 +222,14 @@ function settle(g,now){
   for(const e of g.timed){ const due=Math.min(e.total,Math.floor((now-e.start)/e.every)); const add=(due-e.done)*e.amt;
     if(add>0){ if(e.kind==="mana") g.mana[e.owner]=Math.min(g.manaMax[e.owner],g.mana[e.owner]+add); else { const c=g.pieces.find(p=>p.owner===e.owner&&p.type==="nucleo"&&!p.dead); if(c) c.hp=Math.min(c.maxHp,c.hp+add); } }
     e.done=due; }
-  g.timed=g.timed.filter(e=>e.done<e.total); g.traps=g.traps.filter(t=>t.until>now); return g;
+  g.timed=g.timed.filter(e=>e.done<e.total); g.traps=g.traps.filter(t=>t.until>now);
+  // mortos-vivos da Necromancia voltam a ser lápides quando o tempo acaba
+  for(const p of g.pieces) if(p.undead && now>=p.undead.until && !p.dead){ p.owner=p.undead.owner; p.undead=null; p.dead=true; p.hp=0; p.sealHp=0; p.element=null; }
+  // Árvores da vida curam as casas ao redor a cada intervalo e somem no fim
+  for(const t of (g.trees||[])){ const every=g.rules.arvoreCadaMin*60000, due=Math.min(Math.floor((Math.min(now,t.until)-t.start)/every), Math.floor(g.rules.arvoreMin/g.rules.arvoreCadaMin));
+    for(;t.done<due;t.done++) for(const p of g.pieces) if(!p.dead && Math.max(Math.abs(p.r-t.r),Math.abs(p.c-t.c))===1) p.hp=Math.min(p.maxHp,p.hp+g.rules.arvoreCura); }
+  g.trees=(g.trees||[]).filter(t=>t.until>now);
+  return g;
 }
 const V = () => settle(clone(G),gnow());
 function addLog(g,x){ g.log.push({t:Date.now(),x}); if(g.log.length>40) g.log=g.log.slice(-40); }
@@ -292,6 +321,8 @@ async function aiScrolls(easy){
     if(eff==="recMana") return g.mana[side]<g.manaMax[side]*.6?[-1,-1]:null;
     if(eff==="recVida") return core.hp<core.maxHp*.85?[-1,-1]:null;
     if(EFFECTS[eff]?.element){ const t=mine.filter(p=>p.type!=="nucleo"&&!p.element).sort((a,b)=>b.st.forca-a.st.forca)[0]; return t?[t.r,t.c]:null; }
+    if(eff==="necromancia"){ const t=g.pieces.filter(p=>p.dead&&p.type!=="nucleo"&&tg.some(([r,c])=>r===p.r&&c===p.c)).sort((a,b)=>b.st.forca-a.st.forca)[0]; return t?[t.r,t.c]:null; }
+    if(eff==="arvore"){ let best=null,bs=0; for(const [r,c] of tg){ const sc=mine.filter(p=>Math.max(Math.abs(p.r-r),Math.abs(p.c-c))===1).reduce((s,p)=>s+(p.maxHp-p.hp)+1,0); if(sc>bs){bs=sc;best=[r,c];} } return bs>=3?best:null; }
     return null;
   };
   for(let i=0;i<3;i++){ refresh(); const s=g.scrolls[side][i]; if(s.state!=="ready") continue;
@@ -301,6 +332,8 @@ async function aiScrolls(easy){
   refresh(); const cost=g.rules.custoCristal; const free=g.scrolls[side].findIndex(s=>s.state!=="ready");
   if(free<0 || g.mana[side] < 3*cost+20 || Math.random()<(easy?.6:.25)) return;
   const pri=[]; if(g.pieces.some(p=>p.owner===side&&p.dead&&p.type!=="nucleo")) pri.push("ressuscitar");
+  if(g.pieces.some(p=>p.dead&&p.type!=="nucleo"&&p.st.forca>=3)) pri.push("necromancia");
+  if(mine.filter(p=>p.hp<p.maxHp).length>=2) pri.push("arvore");
   if(mine.some(p=>p.hp<p.maxHp*.6)) pri.push("curar"); if(threat) pri.push("estrutura","selamento");
   if(bestFieldEl()) pri.push("campo");
   if(mine.some(p=>p.type!=="nucleo"&&!p.element)) pri.push(pick(Object.keys(ELEMENTS)));
@@ -322,7 +355,8 @@ document.getElementById("board").addEventListener("click", e => {
   if(sel && isMyTurn()){ const p=g.pieces.find(x=>x.id===sel);
     if(p){ const mv=moveTargets(g,p); if(mv.has(k)) return doMove(sel,r,c); const at_=attackTargets(g,p,now).get(k); if(at_) return doAttack(sel,at_); } }
   const p=at(g,r,c), s=structAt(g,r,c);
-  inspect = p ? {kind:"piece",id:p.id} : s ? {kind:"struct",id:s.id} : (g.spell&&g.spell.r===r&&g.spell.c===c) ? {kind:"spell"} : null;
+  const tr=treeAt(g,r,c);
+  inspect = p ? {kind:"piece",id:p.id} : s ? {kind:"struct",id:s.id} : tr ? {kind:"tree",id:tr.id} : (g.spell&&g.spell.r===r&&g.spell.c===c) ? {kind:"spell"} : null;
   sel = p && !p.dead && p.owner===mySide ? p.id : null;
   renderBoard(); renderExplain();
 });
@@ -342,7 +376,7 @@ document.getElementById("scrolls").addEventListener("click", e => {
 document.getElementById("crystals").addEventListener("click", e => {
   if(e.target.closest("#histBtn")){ histOpen=!histOpen; renderCrystals(); return; }
   const b=e.target.closest("[data-cr]"); if(!b||!G) return;
-  if(!isMyTurn()) return toast("Só dá para fundir cristais na sua vez.");
+  if(!canFuse()) return toast(G.status!=="playing"?"O duelo acabou.":"Sem conexão com os outros jogadores.");
   if(selScroll==null) return toast("Primeiro clique em um pergaminho vazio.");
   const s=G.scrolls[mySide][selScroll]; if(s.state==="ready") return toast("Esse pergaminho já tem um efeito. Use-o ou escolha outro.");
   const cost=G.rules.custoCristal, mana=V().mana[mySide];
@@ -351,10 +385,7 @@ document.getElementById("crystals").addEventListener("click", e => {
   if(pending.length===3){ const ids=[...pending], i=selScroll, cb=findCombo(ids); pending=[];
     setTimeout(()=>cb?Sfx.shine():Sfx.fail(),180);
     rememberTry(ids,cb);
-    commit(g=>{ const sc=g.scrolls[mySide][i]; if(sc.state==="ready") return false; g.mana[mySide]-=3*cost;
-      g.scrolls[mySide][i] = cb ? {state:"ready",c:ids,comboId:cb.id,effect:cb.effect,mana:cb.mana,cd:cb.cooldown} : {state:"fail",c:ids};
-      if(cb && !g.found[mySide].includes(cb.id)) g.found[mySide].push(cb.id);
-      addLog(g, cb?`${g.players[mySide].name} fundiu 3 cristais num pergaminho.`:`${g.players[mySide].name} fundiu 3 cristais, mas a combinação não existe.`); });
+    fuseNow(mySide,i,ids);
   }
 });
 document.getElementById("explain").addEventListener("click", e => {
@@ -375,7 +406,7 @@ function renderScore(){ const S=G.series, el=$("#gScore"); el.hidden=false; cons
   el.innerHTML=`<b class="num">${S.score[a]} x ${S.score[b]}</b> · duelo ${S.round}${G.mode==="2x2"?" · 2x2":""}`; }
 function toView(dr,dc){ return myTeam()==="B" ? [dr,7-dc] : [7-dr,dc]; }
 function plateFace(p){
-  const im=IMGS[p.owner]||{}; let img=null;
+  const im=IMGS[p.undead?p.undead.owner:p.owner]||{}; let img=null;
   if(p.dead) img=im.tomb; else if(p.type==="nucleo") img=im.core; else img=(im.plates||[])[p.plate];
   if(img) return `<img class="pimg" alt="" src="${esc(img)}">`;
   if(p.dead) return icon("lapide");
@@ -387,7 +418,8 @@ function renderBoard(){
   // novos efeitos (ataque, cura, pergaminho) vindos da última jogada
   let play=[];
   if(g.fx && g.fx.seq!==fxSeen){ fxSeen=g.fx.seq; play=g.fx.items||[]; fxDrop={}; for(const it of play) if(it.id&&it.prev!=null) fxDrop[it.id]={prev:it.prev,until:Date.now()+900}; }
-  B.className = "board" + (g.field ? " field" : ""); B.style.setProperty("--field", g.field ? ELEMENTS[g.field.el].hex : "transparent");
+  const fcls = "board" + (g.field ? ` field field-${g.field.el}` : ""); if(B.className!==fcls){ B.className=fcls; renderFieldFx(g.field); }
+  B.style.setProperty("--field", g.field ? ELEMENTS[g.field.el].hex : "transparent");
   let mv=new Map(), atk=new Map(), tgt=new Set();
   if(sel && isMyTurn()){ const p=g.pieces.find(x=>x.id===sel); if(p&&!p.dead){ mv=moveTargets(g,p); atk=attackTargets(g,p,now); } }
   if(selScroll!=null && mySide){ const s=g.scrolls[mySide][selScroll]; if(s?.state==="ready") tgt=effectTargets(g,s.effect,mySide); }
@@ -397,17 +429,18 @@ function renderBoard(){
     const cls=["cell",(r+c)%2===0?"dk":""]; if(p&&p.id===sel) cls.push("sel"); if(mv.has(k)) cls.push("mv"); if(atk.has(k)) cls.push("atk"); if(tgt.has(k)) cls.push("tgt");
     let inner="", label="Casa vazia";
     if(t && t.owner===mySide) inner+=`<div class="trap" style="color:var(--${t.owner})">${icon("armadilha")}</div>`;
+    const tree=treeAt(g,r,c); if(tree){ inner+=`<div class="tree"><img alt="" src="img/arvore.png"></div>`; label=`Árvore da vida, some em ${fmtS(Math.ceil((tree.until-now)/1000))}`; }
     if(g.spell && g.spell.r===r && g.spell.c===c){ inner+=`<div class="spell" title="Pergaminho de feitiço"><svg viewBox="0 0 170 100"><use href="#scrollbg"/></svg></div>`; label="Pergaminho de feitiço"; }
     if(p){ const pct=Math.max(0,p.hp/p.maxHp), showHp=!p.dead && (p.type!=="nucleo"||p.owner===mySide);
       const drop=fxDrop[p.id] && fxDrop[p.id].until>Date.now() ? fxDrop[p.id] : null;
-      const tag = p.dead ? "" : (p.type==="nucleo" ? g.players[p.owner].name : pname(p));
-      inner+=`<div class="pc ${p.owner} ${p.dead?"dead":""} ${p.type==="nucleo"?"core":"plate"}">${plateFace(p)}
+      const tag = p.dead ? "" : (p.type==="nucleo" ? g.players[p.owner].name : (p.undead?"💀 ":"")+pname(p));
+      inner+=`<div class="pc ${p.owner} ${p.dead?"dead":""} ${p.undead?"undead":""} ${p.type==="nucleo"?"core":"plate"}">${plateFace(p)}
         ${tag?`<span class="ptag">${esc(tag)}</span>`:""}
         ${showHp?`<div class="hp"><i class="${pct<.34?"low":pct<.67?"mid":""} ${drop?"drop":""}" style="width:${pct*100}%${drop?`;--from:${Math.min(1,drop.prev)*100}%`:""}"></i></div>`:""}
-        ${p.element&&!p.dead?`<span class="el" style="background:${ELEMENTS[p.element].hex}" title="${ELEMENTS[p.element].name}"></span>`:""}
+        ${p.element&&!p.dead?`<span class="el" style="--elc:${ELEMENTS[p.element].hex}" title="${ELEMENTS[p.element].name}">${ELEMENTS[p.element].emoji}</span>`:""}
         ${p.sealHp>0?`<div class="seal"><span>selo ${p.sealHp}</span></div>`:""}
         ${!p.dead&&pieceCd(g,p,now)>0?`<span class="cd">${Math.ceil(pieceCd(g,p,now)/1000)}s</span>`:""}</div>`;
-      label=`${p.dead?"Lápide de "+pname(p):(p.type==="nucleo"?"Núcleo de "+g.players[p.owner].name:pname(p))} ${p.owner===mySide?"sua":isEnemy(g,p.owner,mySide||"p1")?"inimiga":"do parceiro"}${showHp?`, vida ${p.hp}`:""}`; }
+      label=`${p.undead?"Morto-vivo ":""}${p.dead?"Lápide de "+pname(p):(p.type==="nucleo"?"Núcleo de "+g.players[p.owner].name:pname(p))} ${p.owner===mySide?"sua":isEnemy(g,p.owner,mySide||"p1")?"inimiga":"do parceiro"}${showHp?`, vida ${p.hp}`:""}`; }
     if(s){ const pct=s.hp/s.maxHp; inner+=`<div class="pc ${s.owner}">${icon("estrutura")}<div class="hp"><i class="${pct<.34?"low":pct<.67?"mid":""}" style="width:${pct*100}%"></i></div></div>`; label=`Estrutura, vida ${s.hp}`; }
     cells.push(`<button class="${cls.join(" ")}" data-r="${r}" data-c="${c}" aria-label="${esc(label)}">${inner}</button>`);
   }
@@ -415,6 +448,12 @@ function renderBoard(){
   else cells.forEach((h,i)=>{ if(B._cells[i]!==h){ B.children[i].outerHTML=h; B._cells[i]=h; } });
   const F=$("#fieldTag"); if(F){ F.hidden=!g.field; if(g.field) F.innerHTML=`<i style="background:${ELEMENTS[g.field.el].hex}"></i>Campo de ${ELEMENTS[g.field.el].name}: +${g.rules.bonusCampo} de dano para placas de ${ELEMENTS[g.field.el].name}`; }
   if(play.length) playFx(play);
+}
+function renderFieldFx(field){
+  let L=$("#fieldfx"); if(!L){ L=document.createElement("div"); L.id="fieldfx"; $(".boardwrap").appendChild(L); }
+  if(!field){ L.innerHTML=""; return; }
+  const e=ELEMENTS[field.el].emoji; L.className="fieldfx fx-"+field.el;
+  L.innerHTML=[...Array(10)].map((_,i)=>`<span style="left:${(i*37+11)%96}%;animation-delay:${(i*0.7)%5}s;animation-duration:${4+(i%4)}s">${e}</span>`).join("");
 }
 function cellEl(r,c){ return $(`#board .cell[data-r="${r}"][data-c="${c}"]`); }
 function floatText(r,c,text,cls){
@@ -428,12 +467,14 @@ function playFx(items){
   for(const it of items){
     if(it.k==="hit"){ if(it.from) flashCell(it.from[0],it.from[1],"lunge",450); flashCell(it.to[0],it.to[1],"hit"); floatText(it.to[0],it.to[1],"−"+it.dmg,"dmg"); Sfx.hit(); }
     else if(it.k==="heal"){ flashCell(it.to[0],it.to[1],"healfx"); floatText(it.to[0],it.to[1],"+"+it.amt,"heal"); }
+    else if(it.k==="necro"){ flashCell(it.to[0],it.to[1],"necrofx",900); floatText(it.to[0],it.to[1],"💀","heal"); Sfx.fail(); }
     else if(it.k==="pickup"){ flashCell(it.to[0],it.to[1],"healfx"); floatText(it.to[0],it.to[1],"pergaminho!","heal"); Sfx.pickup(); if(it.side===mySide) toast("Você ganhou um pergaminho pronto!"); }
-    else if(it.k==="spell"){ flashCell(it.to[0],it.to[1],"healfx",900); Sfx.pickup(); toast("Um pergaminho de feitiço apareceu no centro!"); }
+    else if(it.k==="spell"){ flashCell(it.to[0],it.to[1],"healfx",900); Sfx.pickup(); toast("Um pergaminho de feitiço apareceu no tabuleiro!"); }
   }
 }
+const canFuse = () => G && G.status==="playing" && mySide && !G.out?.[mySide] && netOk();
 function renderCrystals(){
-  const can = isMyTurn() && selScroll!=null && G.scrolls[mySide]?.[selScroll]?.state!=="ready";
+  const can = canFuse() && selScroll!=null && G.scrolls[mySide]?.[selScroll]?.state!=="ready";
   const hist=(me?.hist||[]).filter(h=>h.room===G.roomId).slice(-10).reverse();
   setHTML($("#crystals"), `<div class="cgrid">${CRYSTALS.map(c=>`<button class="crystal" data-cr="${c.id}" title="${c.name}" aria-label="Cristal ${c.name}" ${can?"":"disabled"}>${gem(c.id)}</button>`).join("")}</div>
     <button id="histBtn" class="histbtn" aria-expanded="${histOpen}" title="Últimas combinações">${icon("hist")}<span>últimas</span></button>
@@ -464,13 +505,15 @@ function renderDice(){
     return `<button class="${cls}" data-die="${k}" aria-label="Dado ${names[k]}"><span class="label">${names[k]}</span><span class="face ${d.v==null?"q":""}">${d.v==null?(spin?"":"?"):pips(d.v)}</span><span class="hint">${hint}</span></button>`; }).join("");
 }
 function renderScrolls(){
-  if(!G) return; const list = mySide ? G.scrolls[mySide] : [{state:"empty"},{state:"empty"},{state:"empty"}];
-  $("#scrolls").innerHTML = list.map((s,i)=>{ let inner;
+  if(!G) return; const list = mySide ? G.scrolls[mySide] : [{state:"empty"},{state:"empty"},{state:"empty"}]; const g=V(), now=gnow();
+  setHTML($("#scrolls"), list.map((s,i)=>{ let inner;
+    const left = s.state==="ready"&&mySide ? cdLeft(g,mySide,s.effect,now) : 0;
+    const badge = left>0 ? `<span class="cdbadge ${runsFor(g,mySide)?"":"paused"}" title="Recarga">⏳ ${fmtS(Math.ceil(left/1000))}${runsFor(g,mySide)?"":" ⏸"}</span>` : "";
     if(selScroll===i && s.state!=="ready" && pending.length) inner=`${gemsInline(pending)}<span>${3-pending.length} cristal(is) a escolher</span>`;
-    else if(s.state==="ready") inner=`${gemsInline(s.c)}<span>${esc(EFFECTS[s.effect]?.name||s.effect)}${s.free?" ✦":""}</span>`;
+    else if(s.state==="ready") inner=`${gemsInline(s.c)}<span>${EFFECTS[s.effect]?.emoji?EFFECTS[s.effect].emoji+" ":""}${esc(EFFECTS[s.effect]?.name||s.effect)}${s.free?" ✦":""}</span>`;
     else if(s.state==="fail") inner=`${gemsInline(s.c)}<span>Resultado zero</span>`;
     else inner=`<span>${selScroll===i?"Escolha 3 cristais":"Pergaminho vazio"}</span>`;
-    return `<button class="scroll ${s.state}" data-scroll="${i}" aria-pressed="${selScroll===i}"><svg class="bg" viewBox="0 0 170 100"><use href="#scrollbg"/></svg><div class="in">${inner}</div></button>`; }).join("");
+    return `<button class="scroll ${s.state} ${left>0?"cooling":""}" data-scroll="${i}" aria-pressed="${selScroll===i}"><svg class="bg" viewBox="0 0 170 100"><use href="#scrollbg"/></svg><div class="in">${inner}</div>${badge}</button>`; }).join(""));
 }
 function kv(label,val){ return `<div><span class="label">${label}</span><br><b class="num">${val}</b></div>`; }
 function foundList(g){
@@ -483,14 +526,16 @@ function renderExplain(){
     if(s.state==="ready"){ const E=EFFECTS[s.effect]; const why=canUseScroll(g,s); const left=cdLeft(g,mySide,s.effect,now);
       const action = why ? `<p style="margin:0"><b>${esc(why)}</b></p>`
         : E?.target==="none" ? `<div><button class="btn" id="exUse">Ativar efeito</button></div>`
-        : E?.target==="field" ? `<div><span class="label">Escolha o elemento do campo</span><div class="fieldpick">${Object.entries(ELEMENTS).map(([k,e])=>`<button class="btn sm" data-field="${k}"><i style="background:${e.hex}"></i>${e.name}</button>`).join("")}</div></div>`
+        : E?.target==="field" ? `<div><span class="label">Escolha o elemento do campo</span><div class="fieldpick">${Object.entries(ELEMENTS).map(([k,e])=>`<button class="btn sm" data-field="${k}"><span class="emo">${e.emoji}</span>${e.name}</button>`).join("")}</div></div>`
         : `<p style="margin:0"><b>Clique numa casa destacada em amarelo no tabuleiro.</b></p>`;
-      X.innerHTML=`<span class="label">Explicação${s.free?" · pergaminho de feitiço":""}</span><h3>${esc(E?.name||s.effect)}</h3><p style="margin:0">${E?E.txt(g.rules):"Efeito desconhecido."}</p>
+      X.innerHTML=`<span class="label">Explicação${s.free?" · pergaminho de feitiço":""}</span><h3>${E?.emoji?E.emoji+" ":""}${esc(E?.name||s.effect)}</h3><p style="margin:0">${E?E.txt(g.rules):"Efeito desconhecido."}</p>
       <div class="kv">${kv("Consumo de mana",s.mana)}${kv("Intervalo",fmtS(s.cd||0))}${left>0?kv("Recarga restante",Math.ceil(left/1000)+"s"):""}</div>${action}`;
       const u=$("#exUse"); if(u) u.onclick=()=>useScroll(selScroll); return; }
     X.innerHTML=`<span class="label">Explicação</span><h3>Fundir cristais</h3><p style="margin:0">Clique em 3 cristais coloridos para fundi-los neste pergaminho. Cada cristal consome ${g.rules.custoCristal} de mana. As combinações foram sorteadas quando a sala foi criada; se a combinação não existir, o resultado é zero e a mana é perdida. O botão “últimas” mostra o que você já tentou.</p>
-      ${s.state==="fail"?`<p style="margin:0"><b>A última fusão deste pergaminho não formou nenhum efeito.</b></p>`:""}${!isMyTurn()?`<p style="margin:0"><b>Aguarde a sua vez para fundir.</b></p>`:""}${foundList(g)}`; return; }
+      ${s.state==="fail"?`<p style="margin:0"><b>A última fusão deste pergaminho não formou nenhum efeito.</b></p>`:""}${!isMyTurn()?`<p style="margin:0">Você pode fundir cristais também na vez do adversário.</p>`:""}${foundList(g)}`; return; }
   if(inspect){
+    if(inspect.kind==="tree"){ const t=(g.trees||[]).find(x=>x.id===inspect.id); if(t){ const every=g.rules.arvoreCadaMin*60000, next=t.start+(t.done+1)*every;
+      X.innerHTML=`<span class="label">Explicação · de ${esc(g.players[t.owner].name)}</span><h3>🌳 Árvore da vida</h3><p style="margin:0">Todas as placas nas 8 casas ao redor recuperam ${g.rules.arvoreCura} de vida a cada ${g.rules.arvoreCadaMin} minutos.</p><div class="kv">${next<t.until?kv("Próxima cura",fmtS(Math.max(0,Math.ceil((next-now)/1000)))):""}${kv("Some em",fmtS(Math.max(0,Math.ceil((t.until-now)/1000))))}</div>`; return; } }
     if(inspect.kind==="spell" && g.spell){ X.innerHTML=`<span class="label">Explicação</span><h3>Pergaminho de feitiço</h3><p style="margin:0">Leve uma placa ou o seu núcleo até esta casa (passar por cima também vale). Você ganha um pergaminho com um efeito sorteado, já pronto, sem precisar combinar cristais.</p>`; return; }
     if(inspect.kind==="piece"){ const p=g.pieces.find(x=>x.id===inspect.id); if(p){ const st=p.st; const mine=p.owner===mySide; const cd=pieceCd(g,p,now);
       let tip=""; if(mine&&isMyTurn()&&!p.dead){ const A=g.dice.atacar,F=g.dice.forca,M=g.dice.andar;
@@ -504,7 +549,7 @@ function renderExplain(){
       const stats = p.type==="nucleo" ? `${kv("Vida",mine?p.hp+"/"+p.maxHp:"oculta")}${kv("Distância andar","resultado do dado")}`
         : `${kv("Vida",p.dead?0:p.hp+"/"+p.maxHp)}${kv("Força",st.forca)}${kv("Distância ataque",st.atq)}${kv("Distância andar",st.andar)}${kv("Intervalo",st.intervalo+"s")}${cd>0?kv("Recarga",Math.ceil(cd/1000)+"s"):""}${kv("Elemento",p.element?ELEMENTS[p.element].name:"—")}`;
       X.innerHTML=`<span class="label">Explicação · ${esc(owner)}</span><h3>${p.dead?"Lápide · ":""}${esc(pname(p))}</h3>
-        <div class="kv">${stats}</div>${p.type==="nucleo"?`<p style="margin:0;font-size:14px">O núcleo anda quantas casas o dado Andar mandar, mas não ataca. Se ele chegar a zero, você sai do duelo.</p>`:""}${tip?`<p style="margin:0"><b>${tip}</b></p>`:""}`; return; } }
+        <div class="kv">${stats}${p.undead?kv("Volta a ser lápide em",fmtS(Math.max(0,Math.ceil((p.undead.until-now)/1000)))):""}</div>${p.undead?`<p style="margin:0;font-size:14px">💀 Levantada por Necromancia: luta por ${esc(g.players[p.owner].name)} até o tempo acabar.</p>`:""}${p.type==="nucleo"?`<p style="margin:0;font-size:14px">O núcleo anda quantas casas o dado Andar mandar, mas não ataca. Se ele chegar a zero, você sai do duelo.</p>`:""}${tip?`<p style="margin:0"><b>${tip}</b></p>`:""}`; return; } }
     else { const s=g.structures.find(x=>x.id===inspect.id); if(s){ X.innerHTML=`<span class="label">Explicação</span><h3>Estrutura</h3><div class="kv">${kv("Vida",s.hp+"/"+s.maxHp)}${kv("Dono",esc(g.players[s.owner].name))}</div><p style="margin:0">Bloqueia a passagem e os ataques. Para atingir o que está atrás, dê a volta ou destrua-a.</p>`; return; } }
   }
   const my=isMyTurn(), nextSpell=Math.max(0,Math.ceil((g.spellNext-now)/1000));

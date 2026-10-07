@@ -52,4 +52,7 @@ www = ROOT / "www"; (www / "fonts").mkdir(parents=True, exist_ok=True)
 (www / "index.html").write_text(html)
 for f in ["marcellus-sc/files/marcellus-sc-latin-400-normal.woff2"] + [f"alegreya-sans/files/alegreya-sans-latin-{w}-normal.woff2" for w in (400,500,700,800)]:
     shutil.copy(ROOT / "node_modules/@fontsource" / f, www / "fonts" / pathlib.Path(f).name)
+(www / "img").mkdir(exist_ok=True)
+for f in (ROOT / "src/img").glob("*"):
+    shutil.copy(f, www / "img" / f.name)
 print("www/index.html:", len(html), "bytes")

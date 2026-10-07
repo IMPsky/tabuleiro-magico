@@ -11,11 +11,11 @@ const CRYSTALS = [
 ];
 const CR = Object.fromEntries(CRYSTALS.map(c=>[c.id,c]));
 const ELEMENTS = {
-  agua:{name:"Água",strong:["fogo"],hex:"#2f8ff0"}, raio:{name:"Raio",strong:["agua","gelo"],hex:"#f5d90a"},
-  fogo:{name:"Fogo",strong:["planta","gelo"],hex:"#f0531e"}, gelo:{name:"Gelo",strong:["planta","agua"],hex:"#9fe4ff"},
-  terra:{name:"Terra",strong:["fogo","gelo","vento"],hex:"#8a5a2b"}, planta:{name:"Planta",strong:["agua","terra"],hex:"#37b24d"},
-  vento:{name:"Vento",strong:["fogo","planta"],hex:"#c9f2e4"}, luz:{name:"Luz",strong:["trevas"],hex:"#fff6c2"},
-  trevas:{name:"Trevas",strong:["luz"],hex:"#3b2357"}
+  agua:{name:"Água",strong:["fogo"],hex:"#2f8ff0",emoji:"💧"}, raio:{name:"Raio",strong:["agua","gelo"],hex:"#f5d90a",emoji:"⚡"},
+  fogo:{name:"Fogo",strong:["planta","gelo"],hex:"#f0531e",emoji:"🔥"}, gelo:{name:"Gelo",strong:["planta","agua"],hex:"#9fe4ff",emoji:"❄️"},
+  terra:{name:"Terra",strong:["fogo","gelo","vento"],hex:"#8a5a2b",emoji:"⛰️"}, planta:{name:"Planta",strong:["agua","terra"],hex:"#37b24d",emoji:"🌿"},
+  vento:{name:"Vento",strong:["fogo","planta"],hex:"#c9f2e4",emoji:"🌪️"}, luz:{name:"Luz",strong:["trevas"],hex:"#fff6c2",emoji:"✨"},
+  trevas:{name:"Trevas",strong:["luz"],hex:"#3b2357",emoji:"🌑"}
 };
 
 /* Regras fixas: iguais para todos os duelistas. */
@@ -23,7 +23,8 @@ const RULES = {
   manaBase:200, nucleoVidaBase:100, nucleoAndar:6, feiticoMin:5, manaPorTurno:5, custoCristal:1,
   bonusElemento:2, bonusVantagem:2, bonusCampo:2, curaValor:6,
   armadilhaDano:4, armadilhaDuracao:300, estruturaVida:15, seloVida:4,
-  recManaQtd:2, recManaSeg:60, recVidaQtd:2, recVidaMin:2,
+  recManaQtd:2, recManaSeg:60, recVidaQtd:3, recVidaSeg:2, recVidaDur:120,
+  necroVida:2, necroMin:5, arvoreCura:6, arvoreCadaMin:4, arvoreMin:10,
   pontosArsenal:40, vitoriasSerie:2
 };
 
@@ -79,7 +80,7 @@ function layoutFor(mode, side){
   return {core:[row(B.core[0]),B.core[1]], slots:B.slots.map(([r,c])=>[row(r),c])};
 }
 const pname = p => p.type==="nucleo" ? "Núcleo Mágico" : (p.name || `Placa ${p.plate+1}`);
-const TARGET_TXT = {ownPiece:"uma placa sua", ownTomb:"uma lápide sua", emptyNearOwn:"uma casa vazia perto das suas placas", enemyNearOwn:"uma placa inimiga perto das suas", none:"ativa na hora", field:"o tabuleiro inteiro"};
+const TARGET_TXT = {anyTomb:"qualquer lápide", emptyAny:"qualquer casa vazia", ownPiece:"uma placa sua", ownTomb:"uma lápide sua", emptyNearOwn:"uma casa vazia perto das suas placas", enemyNearOwn:"uma placa inimiga perto das suas", none:"ativa na hora", field:"o tabuleiro inteiro"};
 
 /* ---- efeitos dos pergaminhos ---- */
 const EFFECTS = {
@@ -89,17 +90,20 @@ const EFFECTS = {
   estrutura:{name:"Estrutura",target:"emptyNearOwn",txt:r=>`Ergue uma estrutura com ${r.estruturaVida} de vida numa casa vazia ao redor de uma placa sua. Ninguém atravessa e ela bloqueia ataques que passem por ela: o inimigo precisa dar a volta ou destruí-la.`},
   selamento:{name:"Selamento",target:"enemyNearOwn",txt:r=>`Sela uma placa inimiga vizinha a uma placa sua: ela não anda até o selo (${r.seloVida} de vida) ser quebrado. O dono quebra o selo atacando a própria placa selada.`},
   recMana:{name:"Recuperação de mana",target:"none",txt:r=>`Recupera ${r.recManaQtd} de mana a cada 1 segundo durante ${r.recManaSeg} segundos.`},
-  recVida:{name:"Recuperação de vida",target:"none",txt:r=>`Seu núcleo recupera ${r.recVidaQtd} de vida a cada 1 minuto, por ${r.recVidaMin} minutos.`},
-  campo:{name:"Campo elemental",target:"field",txt:r=>`Muda a cor do tabuleiro para um elemento que você escolhe. Enquanto o campo durar, toda placa com o mesmo elemento do campo causa +${r.bonusCampo} de dano, de qualquer duelista. Dura até alguém criar outro campo ou o duelo acabar.`}
+  recVida:{name:"Recuperação de vida",target:"none",txt:r=>`Seu núcleo recupera ${r.recVidaQtd} de vida a cada ${r.recVidaSeg} segundos, durante ${r.recVidaDur/60} minutos.`},
+  necromancia:{name:"Necromancia",target:"anyTomb",emoji:"💀",txt:r=>`Revive qualquer lápide, sua ou do inimigo, para lutar do seu lado. A placa volta com só ${r.necroVida} de vida e dura ${r.necroMin} minutos; depois cai e vira lápide de novo.`},
+  arvore:{name:"Árvore da vida",target:"emptyAny",emoji:"🌳",txt:r=>`Planta uma árvore numa casa vazia. Todas as placas nas casas ao redor dela recuperam ${r.arvoreCura} de vida a cada ${r.arvoreCadaMin} minutos. A árvore dura ${r.arvoreMin} minutos e ninguém atravessa a casa dela.`},
+  campo:{name:"Campo elemental",target:"field",emoji:"🌀",txt:r=>`Transforma o chão do tabuleiro no terreno de um elemento que você escolhe (lava, água, gelo...). Enquanto o campo durar, toda placa com o mesmo elemento do campo causa +${r.bonusCampo} de dano, de qualquer duelista. Dura até alguém criar outro campo ou o duelo acabar.`}
 };
 for (const [k,e] of Object.entries(ELEMENTS)) {
-  EFFECTS[k] = {name:"Elemento "+e.name,target:"ownPiece",element:k,
-    txt:r=>`Dá o elemento ${e.name} a uma placa sua: +${r.bonusElemento} de dano em qualquer placa e mais +${r.bonusVantagem} contra placas de ${e.strong.map(s=>ELEMENTS[s].name).join(", ")}.`};
+  EFFECTS[k] = {name:"Elemento "+e.name,target:"ownPiece",element:k,emoji:e.emoji,
+    txt:r=>`Dá o elemento ${e.emoji} ${e.name} a uma placa sua: +${r.bonusElemento} de dano em qualquer placa e mais +${r.bonusVantagem} contra placas de ${e.strong.map(s=>ELEMENTS[s].name).join(", ")}.`};
 }
 /* faixas usadas no sorteio das combinações: [mana mínima, mana máxima, intervalos possíveis em segundos] */
 const EFFECT_COST = {
   curar:[6,10,[20,30,45]], ressuscitar:[16,24,[60,90,120]], armadilha:[8,12,[30,45,60]], estrutura:[8,12,[30,45,60]],
-  selamento:[10,14,[45,60,90]], recMana:[4,8,[90,120]], recVida:[6,10,[90,120]], campo:[10,16,[45,60,90]]
+  selamento:[10,14,[45,60,90]], recMana:[4,8,[90,120]], recVida:[6,10,[90,120]], campo:[10,16,[45,60,90]],
+  necromancia:[14,20,[60,90,120]], arvore:[12,18,[90,120]]
 };
 function genCombos(){
   const used=new Set(), out=[];
