@@ -1,0 +1,99 @@
+<div id="app">
+  <!-- LOGIN -->
+  <section id="scr-login" class="screen">
+    <div class="floor" aria-hidden="true"></div>
+    <div class="army l" aria-hidden="true" id="armyL"></div>
+    <div class="army r" aria-hidden="true" id="armyR"></div>
+    <form class="login-card" id="loginForm" autocomplete="on">
+      <h1>Tabuleiro Mágico</h1>
+      <p class="sub" id="loginMode">Entre com seu nome de duelista</p>
+      <div>
+        <label class="slant"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="7" r="5"/><path d="M3 23c0-6 4-9 9-9s9 3 9 9z"/></svg><input id="lgName" placeholder="Nome do duelista" autocomplete="username" maxlength="16" required></label>
+        <label class="slant b"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 10V7a6 6 0 0 1 12 0v3h1v13H5V10zm3 0h6V7a3 3 0 0 0-6 0z"/></svg><input id="lgPass" type="password" placeholder="Senha" autocomplete="current-password" required></label>
+      </div>
+      <div class="field" id="lgPass2Wrap" hidden><input id="lgPass2" type="password" placeholder="Repita a senha" autocomplete="new-password"></div>
+      <div class="err" id="lgErr" role="alert"></div>
+      <button class="btn primary" id="lgSubmit" type="submit">LOGIN</button>
+      <button class="linkbtn" id="lgToggle" type="button">Cadastre-se</button>
+      <button class="linkbtn small" id="lgForgot" type="button">Esqueci a senha</button>
+      <p class="muted" style="text-align:center;font-size:12px;margin:0">As contas ficam salvas neste aparelho. Não precisa de internet.</p>
+    </form>
+    <form class="login-card" id="forgotForm" hidden>
+      <h1>Recuperar senha</h1>
+      <p class="sub">Use o código de recuperação que apareceu quando você criou a conta. Se perdeu o código, peça ao administrador deste aparelho para trocar sua senha.</p>
+      <div class="field"><label class="label" for="fgName">Nome do duelista</label><input id="fgName" maxlength="16" required></div>
+      <div class="field"><label class="label" for="fgCode">Código de recuperação</label><input id="fgCode" maxlength="12" autocapitalize="characters" required></div>
+      <div class="field"><label class="label" for="fgPass">Nova senha</label><input id="fgPass" type="password" autocomplete="new-password" required></div>
+      <div class="err" id="fgErr" role="alert"></div>
+      <button class="btn primary" type="submit">TROCAR SENHA</button>
+      <button class="linkbtn small" id="fgBack" type="button">Voltar ao login</button>
+    </form>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="scr-lobby" class="screen" hidden>
+    <header class="topbar">
+      <div class="brand"><svg viewBox="0 0 40 40" fill="currentColor"><use href="#ico-nucleo"/></svg>Tabuleiro Mágico</div>
+      <nav class="nav" id="nav">
+        <button data-nav="home">Início</button>
+        <button data-nav="play">Jogar</button>
+        <button data-nav="friends">Amigos<span class="badge" id="friendBadge" hidden>0</span></button>
+        <button data-nav="profile">Perfil</button>
+        <button data-nav="admin" id="navAdmin" hidden>Administração</button>
+      </nav>
+      <button class="btn sm ghost" id="logout">Sair</button>
+    </header>
+    <main class="lobby">
+      <aside class="card profile" id="profileCard"></aside>
+      <div id="panel" style="min-width:0"></div>
+    </main>
+  </section>
+
+  <!-- GAME -->
+  <section id="scr-game" class="screen" hidden>
+    <header class="gbar">
+      <button class="btn sm ghost" id="gBack" title="Voltar ao menu (o duelo continua)">← Menu</button>
+      <div class="room" id="gTitle">Duelo</div>
+      <span class="chip" id="gLink" hidden></span>
+      <span class="turnpill" id="gTurn"><span id="gTurnTxt">—</span><span class="t" id="gTimer"></span></span>
+      <button class="btn sm gold" id="gPass">Passar vez</button>
+      <button class="btn sm danger" id="gQuit">Desistir</button>
+    </header>
+    <div class="banner" id="gNetBanner" hidden style="margin:10px 16px 0"></div>
+    <div class="game">
+      <div style="min-width:0;display:grid;gap:10px">
+        <div class="boardwrap">
+          <div class="ranks" id="ranks"></div>
+          <div class="board" id="board" role="grid" aria-label="Tabuleiro"></div>
+          <div class="files" id="files"></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--move)"></i>casa para andar</span>
+          <span><i style="background:var(--atk)"></i>alvo de ataque</span>
+          <span><i style="background:var(--tgt)"></i>alvo do pergaminho</span>
+        </div>
+      </div>
+      <div class="console">
+        <div class="crystals" id="crystals" aria-label="Cristais"></div>
+        <div id="pcards" style="display:grid;gap:8px"></div>
+        <div class="dice" id="dice"></div>
+        <div class="log" id="log" aria-live="polite"></div>
+      </div>
+      <div class="lower">
+        <div class="scrolls" id="scrolls"></div>
+        <div class="explain" id="explain"></div>
+      </div>
+    </div>
+    <div class="overlay" id="endOverlay" hidden></div>
+    <div class="overlay" id="confirmQuit" hidden>
+      <div class="card"><h2>Desistir?</h2><p>O duelo termina agora e a vitória vai para o oponente.</p>
+        <div style="display:flex;gap:8px;justify-content:center"><button class="btn" id="cqNo">Continuar duelando</button><button class="btn danger" id="cqYes">Desistir</button></div></div>
+    </div>
+  </section>
+
+  <!-- connection dialog (create / join room) -->
+  <div class="overlay" id="netOverlay" hidden><div class="card" id="netCard"></div></div>
+  <!-- generic modal -->
+  <div class="overlay" id="modal" hidden><div class="card" id="modalCard"></div></div>
+</div>
+<div id="toast" hidden role="status"></div>

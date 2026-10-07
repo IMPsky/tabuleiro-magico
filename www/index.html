@@ -1,0 +1,1306 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>Tabuleiro Mágico</title>
+<style>
+@font-face{font-family:"Marcellus SC";src:url(fonts/marcellus-sc-latin-400-normal.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Alegreya Sans";src:url(fonts/alegreya-sans-latin-400-normal.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Alegreya Sans";src:url(fonts/alegreya-sans-latin-500-normal.woff2) format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"Alegreya Sans";src:url(fonts/alegreya-sans-latin-700-normal.woff2) format("woff2");font-weight:700;font-display:swap}
+@font-face{font-family:"Alegreya Sans";src:url(fonts/alegreya-sans-latin-800-normal.woff2) format("woff2");font-weight:800;font-display:swap}
+
+/* Layout: arcane night-blue duelling hall — board on the left, crystal/dice console on the right, scroll strip and explanation under it (as in the original slides). Single dark theme by choice. */
+:root{
+  color-scheme: dark;
+  --bg:#0a1122; --bg2:#0f1a33; --panel:#14213f; --panel2:#1a2a4f; --line:#2a3b66;
+  --ink:#eef1fa; --muted:#93a1c4; --faint:#5d6c93;
+  --accent:#34d1ad; --accent-ink:#04261e;
+  --gold:#f3b43a; --gold2:#ffcf61; --gold-ink:#3a2504; --scroll:#1590d4;
+  --p1:#2f8fd0; --p1-soft:#174a6e; --p2:#e2465a; --p2-soft:#6a1f2b;
+  --sq-light:#ece9df; --sq-dark:#b9b6ad; --sq-ink:#1d2433;
+  --ok:#46c27a; --warn:#f0a23a; --bad:#ef5468;
+  --move:#2fd3ae; --atk:#ff4d5e; --tgt:#ffcf61;
+  --display:"Marcellus SC", "Trajan Pro", Georgia, serif;
+  --body:"Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+  --r:10px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+h1,h2,h3{font-family:var(--display);font-weight:400;letter-spacing:.04em;margin:0;text-wrap:balance}
+.label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.muted{color:var(--muted)}
+.screen{min-height:100%}
+.btn{border:1px solid var(--line);background:var(--panel2);border-radius:8px;padding:.55em 1em;font-weight:700;display:inline-flex;align-items:center;gap:.45em;justify-content:center}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.gold{background:var(--gold);color:var(--gold-ink);border-color:var(--gold)}
+.btn.danger{background:transparent;color:var(--bad);border-color:color-mix(in srgb,var(--bad) 50%,transparent)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:.3em .7em;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.field{display:grid;gap:4px}
+.field input,.field select{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:.6em .75em;min-width:0;width:100%}
+.field input:focus,.field select:focus{border-color:var(--accent);outline:none}
+.err{color:var(--bad);font-size:14px;min-height:1.2em}
+.okmsg{color:var(--ok);font-size:14px}
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);padding:.6em 1em;border-radius:8px;z-index:50;max-width:min(92vw,520px);box-shadow:0 8px 30px #0008}
+
+/* ---------- LOGIN ---------- */
+#scr-login{position:relative;display:grid;place-items:center;padding:32px 16px;min-height:100%;overflow:hidden;
+  background:
+   radial-gradient(ellipse at 18% 30%, #f3b43a33, transparent 55%),
+   radial-gradient(ellipse at 82% 30%, #e2465a33, transparent 55%),
+   linear-gradient(180deg,#121b33 0%, #0a1122 60%);}
+#scr-login .floor{position:absolute;left:-20%;right:-20%;bottom:-8%;height:46%;
+  background:repeating-conic-gradient(#d9d6cc 0 25%, #20263a 0 50%) 0 0/80px 80px;
+  transform:perspective(420px) rotateX(58deg);transform-origin:bottom;opacity:.55;
+  mask-image:linear-gradient(to top,#000 30%,transparent)}
+#scr-login .army{position:absolute;bottom:22%;display:flex;gap:6px;opacity:.85}
+#scr-login .army.l{left:3%;color:#e9e3d0}
+#scr-login .army.r{right:3%;color:#8e2433}
+#scr-login .army svg{width:64px;height:64px;filter:drop-shadow(0 6px 10px #000a)}
+.login-card{position:relative;z-index:2;width:min(400px,100%);background:#020d1f;border:1px solid #1d3157;border-radius:4px;padding:32px 28px 26px;display:grid;gap:14px;box-shadow:0 20px 60px #000c}
+.login-card h1{font-size:30px;text-align:center;color:var(--gold2)}
+.login-card .sub{text-align:center;color:var(--muted);margin-top:-8px}
+.slant{display:block;position:relative;background:#062146;border:1px solid #1f5b97;clip-path:polygon(0 0,100% 0,100% 62%,0 100%);padding:14px 14px 22px}
+.slant.b{clip-path:polygon(0 38%,100% 0,100% 100%,0 100%);padding:22px 14px 14px;margin-top:-14px}
+.slant input{background:transparent;border:0;width:100%;outline:none;padding-left:26px;color:#cfe3ff}
+.slant svg{position:absolute;left:14px;width:16px;height:16px;color:#4ea3f0}
+.slant:not(.b) svg{top:16px}.slant.b svg{bottom:16px}
+.offline{display:grid;gap:10px;border-top:1px solid #1d3157;padding-top:14px}
+.offline .diff{display:flex;gap:8px}
+.offline .diff .btn{flex:1}
+.linkbtn{background:none;border:0;color:var(--ink);font-size:17px;text-align:center}
+.linkbtn.small{font-size:14px;color:var(--muted);text-decoration:underline}
+.login-card .btn.primary{padding:.8em;letter-spacing:.12em;font-size:13px;border-radius:0}
+
+/* ---------- LOBBY ---------- */
+.topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--bg2);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+.brand{font-family:var(--display);font-size:20px;color:var(--gold2);margin-right:auto;display:flex;align-items:center;gap:8px}
+.brand svg{width:26px;height:26px;color:var(--gold)}
+.nav{display:flex;gap:6px;flex-wrap:wrap}
+.nav button{background:transparent;border:1px solid transparent;border-radius:8px;padding:.4em .8em;font-weight:700;color:var(--muted)}
+.nav button[aria-current="true"]{color:var(--ink);border-color:var(--line);background:var(--panel)}
+.nav .badge{background:var(--bad);color:#fff;border-radius:999px;font-size:11px;padding:0 6px;margin-left:4px}
+.lobby{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;padding:20px 16px;max-width:1200px;margin:0 auto}
+@media (max-width:820px){.lobby{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.profile{display:grid;gap:14px;align-content:start}
+.profile .who{display:flex;gap:14px;align-items:center}
+.avatar{width:64px;height:64px;border-radius:12px;object-fit:cover;background:var(--panel2);display:grid;place-items:center;font-family:var(--display);font-size:26px;color:var(--gold2);flex:none;overflow:hidden;border:1px solid var(--line)}
+.avatar.sm{width:36px;height:36px;font-size:16px;border-radius:8px}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.statlist{display:grid;gap:8px}
+.stat{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px dashed var(--line);padding-bottom:6px}
+.stat b{font-size:18px}
+.bar{height:8px;background:var(--bg2);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--gold2))}
+.panel-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.panel-head h2{font-size:24px;margin-right:auto}
+.list{display:grid;gap:8px}
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.row .grow{flex:1;min-width:140px}
+.row .title{font-weight:800}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--faint);display:inline-block}
+.dot.on{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.empty{padding:22px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:8px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.form-inline{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.form-inline .field{flex:1;min-width:150px}
+.pieces-guide{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.pg{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:10px;display:grid;gap:6px;justify-items:center;text-align:center}
+.pg svg{width:52px;height:52px;color:var(--p1)}
+.pg .nm{font-family:var(--display);font-size:15px}
+.pg .st{font-size:12px;color:var(--muted)}
+.banner{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:color-mix(in srgb,var(--gold) 16%,var(--panel));border:1px solid color-mix(in srgb,var(--gold) 50%,transparent);border-radius:8px;padding:10px 14px;margin-bottom:14px}
+.banner .grow{flex:1}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tabs button{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:.4em .9em;font-weight:700;color:var(--muted)}
+.tabs button[aria-selected="true"]{color:var(--gold-ink);background:var(--gold);border-color:var(--gold)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+td input{width:70px;background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
+.swatches{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;max-width:360px}
+.sw{aspect-ratio:1;border:2px solid transparent;border-radius:6px;background:var(--bg2);display:grid;place-items:center;padding:3px}
+.sw[aria-pressed="true"]{border-color:var(--gold2);background:var(--panel2)}
+.gem{width:100%;height:100%;display:block}
+.gems-inline{display:inline-flex;gap:3px;vertical-align:middle}
+.gems-inline svg{width:18px;height:18px}
+
+/* ---------- GAME ---------- */
+#scr-game{display:grid;grid-template-rows:auto 1fr}
+.gbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;background:var(--bg2);border-bottom:1px solid var(--line)}
+.gbar .room{font-family:var(--display);font-size:18px;margin-right:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.turnpill{display:inline-flex;align-items:center;gap:8px;padding:.35em .85em;border-radius:99px;font-weight:800;border:1px solid var(--line)}
+.turnpill.mine{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.turnpill .t{font-variant-numeric:tabular-nums}
+.turnpill.low{background:var(--bad);color:#fff;border-color:var(--bad)}
+.game{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,1fr);gap:14px;padding:14px 16px;max-width:1280px;width:100%;margin:0 auto;align-items:start}
+@media (max-width:900px){.game{grid-template-columns:minmax(0,1fr)}}
+.boardwrap{background:#fbfaf6;border-radius:6px;padding:8px 8px 4px 4px;box-shadow:0 10px 40px #0009;display:grid;grid-template-columns:22px minmax(0,1fr);grid-template-rows:minmax(0,1fr) 22px;width:100%;max-width:min(100%,calc(100vh - 140px));margin:0 auto}
+.ranks{display:grid;grid-template-rows:repeat(8,1fr);color:var(--sq-ink);font-weight:700;font-size:13px;text-align:center;align-items:center}
+.files{grid-column:2;display:grid;grid-template-columns:repeat(8,1fr);color:var(--sq-ink);font-weight:700;font-size:13px;text-align:center;align-items:center}
+.board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);aspect-ratio:1;border:1px solid #444;width:100%}
+.cell{position:relative;border:0;padding:0;background:var(--sq-light);display:grid;place-items:center;min-width:0;min-height:0}
+.cell.dk{background:var(--sq-dark)}
+.cell .pc{width:78%;height:78%;display:grid;place-items:center;position:relative}
+.cell .pc svg{width:100%;height:100%}
+.cell .pc.p1{color:var(--p1-soft)}
+.cell .pc.p2{color:var(--p2-soft)}
+.cell .pc.p1 svg{color:#195a86}
+.cell .pc.p2 svg{color:#b02536}
+.cell .pc.dead svg{opacity:.75}
+.cell .hp{position:absolute;left:10%;right:10%;bottom:4%;height:5px;background:#0005;border-radius:3px;overflow:hidden}
+.cell .hp i{display:block;height:100%;background:var(--ok)}
+.cell .hp i.mid{background:var(--warn)} .cell .hp i.low{background:var(--bad)}
+.cell .el{position:absolute;top:3%;right:3%;width:30%;max-width:18px;aspect-ratio:1;border-radius:50%;border:1.5px solid #fff;box-shadow:0 0 0 1px #0006}
+.cell .seal{position:absolute;inset:6%;border:2px dashed #7b3fc0;border-radius:6px;display:grid;place-items:start center}
+.cell .seal span{background:#7b3fc0;color:#fff;font-size:10px;font-weight:800;border-radius:4px;padding:0 4px;transform:translateY(-55%)}
+.cell .cd{position:absolute;top:2%;left:3%;font-size:10px;font-weight:800;color:#fff;background:#000a;border-radius:4px;padding:0 3px}
+.cell .trap{position:absolute;inset:18%;opacity:.55}
+.cell.sel{box-shadow:inset 0 0 0 3px var(--gold)}
+.cell.mv::after{content:"";position:absolute;width:28%;height:28%;border-radius:50%;background:var(--move);opacity:.85;box-shadow:0 0 0 3px #fff9}
+.cell.atk{box-shadow:inset 0 0 0 3px var(--atk)}
+.cell.atk::before{content:"";position:absolute;inset:0;background:color-mix(in srgb,var(--atk) 22%,transparent)}
+.cell.tgt{box-shadow:inset 0 0 0 3px var(--tgt)}
+.cell.tgt::before{content:"";position:absolute;inset:0;background:color-mix(in srgb,var(--tgt) 30%,transparent)}
+.cell.flash{animation:flash .6s}
+@keyframes flash{50%{filter:brightness(1.6) saturate(1.5)}}
+.console{display:grid;gap:12px;align-content:start;min-width:0}
+.crystals{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px}
+.crystal{aspect-ratio:1;border:0;background:transparent;padding:2px;border-radius:6px;transition:transform .12s}
+.crystal:hover:not(:disabled){transform:translateY(-2px) scale(1.06)}
+.crystal:disabled{opacity:.35;cursor:default}
+.pcard{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.pcard.turn{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.pcard .nm{font-weight:800;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pcard .side{width:10px;height:10px;border-radius:2px;display:inline-block}
+.meters{display:grid;gap:5px;margin-top:4px}
+.meter{display:grid;grid-template-columns:62px minmax(0,1fr) 54px;gap:6px;align-items:center;font-size:12px}
+.meter .bar{height:7px}
+.meter .bar i.mana{background:linear-gradient(90deg,#3d7cf0,#7fd0ff)}
+.meter .bar i.life{background:linear-gradient(90deg,#d53d52,#ff8a7a)}
+.meter span:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.dice{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.die{display:grid;gap:6px;justify-items:center;background:linear-gradient(180deg,#2a5e86,#163a58);border:2px solid #0d2238;border-radius:10px;padding:10px 6px;box-shadow:inset 0 0 0 3px #3c7bab}
+.die .label{color:#d8ecff}
+.die .face{width:58px;height:58px;border-radius:12px;background:#fdfdfb;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:8px;box-shadow:0 4px 0 #b9c3cf,0 6px 12px #0006}
+.die .face i{width:9px;height:9px;border-radius:50%;background:#c3192d;place-self:center;visibility:hidden}
+.die .face i.on{visibility:visible}
+.die .face.q{display:grid;place-items:center;grid-template-columns:1fr;grid-template-rows:1fr;font-family:var(--display);font-size:28px;color:#8b98a9}
+.die.spin .face{animation:spin .35s linear infinite;background:repeating-linear-gradient(45deg,#fdfdfb 0 6px,#e9edf3 6px 12px)}
+@keyframes spin{0%{transform:rotate(0) scale(1)}50%{transform:rotate(180deg) scale(.86)}100%{transform:rotate(360deg) scale(1)}}
+.die.used{filter:grayscale(.8) brightness(.7)}
+.die.ready{box-shadow:inset 0 0 0 3px var(--gold2),0 0 18px #ffcf6155}
+.die .hint{font-size:11px;color:#bcd6ee;min-height:1.3em;text-align:center}
+.lower{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,1fr);gap:14px}
+@media (max-width:900px){.lower{grid-template-columns:minmax(0,1fr)}}
+.scrolls{background:var(--scroll);border-radius:var(--r);padding:14px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:center;min-height:150px}
+.scroll{position:relative;border:0;background:transparent;padding:0;aspect-ratio:1.7;display:grid;place-items:center;transition:transform .15s}
+.scroll svg.bg{position:absolute;inset:0;width:100%;height:100%}
+.scroll .in{position:relative;display:grid;gap:4px;justify-items:center;color:var(--gold-ink);font-weight:800;font-size:13px;text-align:center;padding:0 16%}
+.scroll .in .gems-inline svg{width:20px;height:20px}
+.scroll[aria-pressed="true"]{transform:translateY(-4px) scale(1.04);filter:drop-shadow(0 0 10px #fff9)}
+.scroll.ready .in{color:#5a1b00}
+.scroll.fail .in{color:#7a3a2a}
+.explain{background:var(--gold);color:var(--gold-ink);border-radius:var(--r);padding:14px 16px;display:grid;gap:8px;align-content:start;min-height:150px}
+.explain h3{font-size:18px}
+.explain .label{color:#6b4810}
+.explain .kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:4px 12px;font-size:14px}
+.explain .btn{background:var(--gold-ink);color:var(--gold2);border-color:var(--gold-ink)}
+.log{font-size:13px;color:var(--muted);max-height:120px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:8px 12px;display:grid;gap:2px}
+.log b{color:var(--ink);font-weight:700}
+.overlay{position:fixed;inset:0;background:#000b;display:grid;place-items:center;z-index:40;padding:16px}
+.overlay .card{max-width:420px;text-align:center;display:grid;gap:12px}
+.overlay h2{font-size:34px;color:var(--gold2)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;gap:5px;align-items:center}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition:none!important}}
+
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+img{max-width:100%}
+.bigip{font-family:var(--display);font-size:clamp(28px,9vw,44px);color:var(--gold2);margin:6px 0;overflow-wrap:anywhere}
+#netOverlay,#modal{z-index:60}
+#gNetBanner{margin:10px 16px 0}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- LOGIN -->
+  <section id="scr-login" class="screen">
+    <div class="floor" aria-hidden="true"></div>
+    <div class="army l" aria-hidden="true" id="armyL"></div>
+    <div class="army r" aria-hidden="true" id="armyR"></div>
+    <form class="login-card" id="loginForm" autocomplete="on">
+      <h1>Tabuleiro Mágico</h1>
+      <p class="sub" id="loginMode">Entre com seu nome de duelista</p>
+      <div>
+        <label class="slant"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="7" r="5"/><path d="M3 23c0-6 4-9 9-9s9 3 9 9z"/></svg><input id="lgName" placeholder="Nome do duelista" autocomplete="username" maxlength="16" required></label>
+        <label class="slant b"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 10V7a6 6 0 0 1 12 0v3h1v13H5V10zm3 0h6V7a3 3 0 0 0-6 0z"/></svg><input id="lgPass" type="password" placeholder="Senha" autocomplete="current-password" required></label>
+      </div>
+      <div class="field" id="lgPass2Wrap" hidden><input id="lgPass2" type="password" placeholder="Repita a senha" autocomplete="new-password"></div>
+      <div class="err" id="lgErr" role="alert"></div>
+      <button class="btn primary" id="lgSubmit" type="submit">LOGIN</button>
+      <button class="linkbtn" id="lgToggle" type="button">Cadastre-se</button>
+      <button class="linkbtn small" id="lgForgot" type="button">Esqueci a senha</button>
+      <p class="muted" style="text-align:center;font-size:12px;margin:0">As contas ficam salvas neste aparelho. Não precisa de internet.</p>
+    </form>
+    <form class="login-card" id="forgotForm" hidden>
+      <h1>Recuperar senha</h1>
+      <p class="sub">Use o código de recuperação que apareceu quando você criou a conta. Se perdeu o código, peça ao administrador deste aparelho para trocar sua senha.</p>
+      <div class="field"><label class="label" for="fgName">Nome do duelista</label><input id="fgName" maxlength="16" required></div>
+      <div class="field"><label class="label" for="fgCode">Código de recuperação</label><input id="fgCode" maxlength="12" autocapitalize="characters" required></div>
+      <div class="field"><label class="label" for="fgPass">Nova senha</label><input id="fgPass" type="password" autocomplete="new-password" required></div>
+      <div class="err" id="fgErr" role="alert"></div>
+      <button class="btn primary" type="submit">TROCAR SENHA</button>
+      <button class="linkbtn small" id="fgBack" type="button">Voltar ao login</button>
+    </form>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="scr-lobby" class="screen" hidden>
+    <header class="topbar">
+      <div class="brand"><svg viewBox="0 0 40 40" fill="currentColor"><use href="#ico-nucleo"/></svg>Tabuleiro Mágico</div>
+      <nav class="nav" id="nav">
+        <button data-nav="home">Início</button>
+        <button data-nav="play">Jogar</button>
+        <button data-nav="friends">Amigos<span class="badge" id="friendBadge" hidden>0</span></button>
+        <button data-nav="profile">Perfil</button>
+        <button data-nav="admin" id="navAdmin" hidden>Administração</button>
+      </nav>
+      <button class="btn sm ghost" id="logout">Sair</button>
+    </header>
+    <main class="lobby">
+      <aside class="card profile" id="profileCard"></aside>
+      <div id="panel" style="min-width:0"></div>
+    </main>
+  </section>
+
+  <!-- GAME -->
+  <section id="scr-game" class="screen" hidden>
+    <header class="gbar">
+      <button class="btn sm ghost" id="gBack" title="Voltar ao menu (o duelo continua)">← Menu</button>
+      <div class="room" id="gTitle">Duelo</div>
+      <span class="chip" id="gLink" hidden></span>
+      <span class="turnpill" id="gTurn"><span id="gTurnTxt">—</span><span class="t" id="gTimer"></span></span>
+      <button class="btn sm gold" id="gPass">Passar vez</button>
+      <button class="btn sm danger" id="gQuit">Desistir</button>
+    </header>
+    <div class="banner" id="gNetBanner" hidden style="margin:10px 16px 0"></div>
+    <div class="game">
+      <div style="min-width:0;display:grid;gap:10px">
+        <div class="boardwrap">
+          <div class="ranks" id="ranks"></div>
+          <div class="board" id="board" role="grid" aria-label="Tabuleiro"></div>
+          <div class="files" id="files"></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--move)"></i>casa para andar</span>
+          <span><i style="background:var(--atk)"></i>alvo de ataque</span>
+          <span><i style="background:var(--tgt)"></i>alvo do pergaminho</span>
+        </div>
+      </div>
+      <div class="console">
+        <div class="crystals" id="crystals" aria-label="Cristais"></div>
+        <div id="pcards" style="display:grid;gap:8px"></div>
+        <div class="dice" id="dice"></div>
+        <div class="log" id="log" aria-live="polite"></div>
+      </div>
+      <div class="lower">
+        <div class="scrolls" id="scrolls"></div>
+        <div class="explain" id="explain"></div>
+      </div>
+    </div>
+    <div class="overlay" id="endOverlay" hidden></div>
+    <div class="overlay" id="confirmQuit" hidden>
+      <div class="card"><h2>Desistir?</h2><p>O duelo termina agora e a vitória vai para o oponente.</p>
+        <div style="display:flex;gap:8px;justify-content:center"><button class="btn" id="cqNo">Continuar duelando</button><button class="btn danger" id="cqYes">Desistir</button></div></div>
+    </div>
+  </section>
+
+  <!-- connection dialog (create / join room) -->
+  <div class="overlay" id="netOverlay" hidden><div class="card" id="netCard"></div></div>
+  <!-- generic modal -->
+  <div class="overlay" id="modal" hidden><div class="card" id="modalCard"></div></div>
+</div>
+<div id="toast" hidden role="status"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="ico-peao" viewBox="0 0 40 40"><circle cx="20" cy="10" r="6.5"/><path d="M20 4v12M14 10h12" stroke="#fff" stroke-opacity=".55" stroke-width="1.2"/><path d="M20 15 L11 33 H29 Z"/><rect x="7" y="33" width="26" height="3" rx="1"/></symbol>
+    <symbol id="ico-nucleo" viewBox="0 0 40 40"><circle cx="20" cy="19" r="7.5" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="20" cy="19" r="2.4"/><path d="M8.5 10.5a14 14 0 0 0 0 17" fill="none" stroke="currentColor" stroke-width="3"/><path d="M31.5 10.5a14 14 0 0 1 0 17" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 5.5q8 6 16 0" fill="none" stroke="currentColor" stroke-width="3"/><rect x="10" y="31" width="20" height="4" rx="2"/></symbol>
+    <symbol id="ico-torreDisparo" viewBox="0 0 40 40"><path d="M20 2l4 6h-8z"/><path d="M9 13l6-4v8z"/><path d="M31 13l-6-4v8z"/><ellipse cx="20" cy="13" rx="4" ry="3.6"/><path d="M13 18h14l-7 9z"/><path d="M20 27l7 9H13z"/><rect x="11" y="36" width="18" height="2.4" rx="1"/></symbol>
+    <symbol id="ico-torreElemental" viewBox="0 0 40 40"><path d="M9 3l22 10M31 3L9 13" stroke="currentColor" stroke-width="2.4"/><path d="M20 10l8 5-8 5-8-5z"/><path d="M12 20l3 3h10l3-3 2 14H10z"/><rect x="14" y="34" width="12" height="4" rx="1"/></symbol>
+    <symbol id="ico-catapulta" viewBox="0 0 40 40"><rect x="7" y="30" width="28" height="5" rx="1"/><ellipse cx="22" cy="25" rx="5" ry="3.6" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M6 25 L36 12" stroke="currentColor" stroke-width="3"/><path d="M3 22q4 8 11 1" fill="none" stroke="currentColor" stroke-width="2.6"/></symbol>
+    <symbol id="ico-estrutura" viewBox="0 0 40 40"><rect x="3" y="9" width="34" height="23" rx="5"/><path d="M3 17h34M3 24h34M14 9v8M26 9v8M9 17v7M20 17v7M31 17v7M14 24v8M26 24v8" stroke="#000" stroke-opacity=".25" stroke-width="1.2"/></symbol>
+    <symbol id="ico-armadilha" viewBox="0 0 40 40"><path d="M2 24l5-6 3 5 4-8 3 7 3-9 3 9 3-7 4 8 3-5 5 6-6 2H8z"/></symbol>
+    <symbol id="ico-lapide" viewBox="0 0 40 40"><path d="M11 33V12l9-7 9 7v21z"/><path d="M20 12v14M14.5 18h11" stroke="#fff" stroke-width="3"/><rect x="7" y="33" width="26" height="3" rx="1"/></symbol>
+    <symbol id="gem" viewBox="0 0 20 20"><path d="M10 1 19 10 10 19 1 10Z" stroke="#0007" stroke-width="1"/><path d="M10 1 13.5 10 10 19 6.5 10Z" fill="#fff" fill-opacity=".18"/><path d="M1 10h18" stroke="#fff" stroke-opacity=".25"/></symbol>
+    <symbol id="scrollbg" viewBox="0 0 170 100"><path d="M26 14h128c6 0 8 4 8 8v4h-6v58c0 6-4 9-10 9H18c-6 0-10-3-10-9V30c0-6 4-9 10-9h8z" fill="#ffc21a" stroke="#6b4810" stroke-width="2"/><path d="M8 86c0-6 4-9 10-9s9 4 9 9" fill="#e7a50f" stroke="#6b4810" stroke-width="2"/><path d="M154 14c6 0 8 4 8 8s-3 8-8 8" fill="#e7a50f" stroke="#6b4810" stroke-width="2"/><circle cx="158" cy="18" r="3" fill="#e7a50f" stroke="#6b4810" stroke-width="1.5"/></symbol>
+  </defs>
+</svg>
+<script>
+(() => {
+"use strict";
+/* ================= constants ================= */
+const CRYSTALS = [
+  {id:"vermelho",name:"Vermelho",hex:"#e3262b"},{id:"celeste",name:"Celeste",hex:"#4fb6ea"},
+  {id:"preto",name:"Preto",hex:"#14161c"},{id:"petroleo",name:"Petróleo",hex:"#1e6385"},
+  {id:"laranja",name:"Laranja",hex:"#f07a2e"},{id:"roxo",name:"Roxo",hex:"#a03db2"},
+  {id:"verde",name:"Verde",hex:"#3aa33a"},{id:"prata",name:"Prata",hex:"#d3d7da"},
+  {id:"amarelo",name:"Amarelo",hex:"#f5e417"},{id:"marinho",name:"Marinho",hex:"#16246b"},
+  {id:"carmesim",name:"Carmesim",hex:"#b0101e"},{id:"violeta",name:"Violeta",hex:"#7041b5"},
+  {id:"branco",name:"Branco",hex:"#fbfbfb"},{id:"pessego",name:"Pêssego",hex:"#f6c4ab"},
+  {id:"marrom",name:"Marrom",hex:"#7c3c15"},{id:"menta",name:"Menta",hex:"#c6edc9"}
+];
+const CR = Object.fromEntries(CRYSTALS.map(c=>[c.id,c]));
+const ELEMENTS = {
+  agua:{name:"Água",strong:["fogo"],hex:"#2f8ff0"}, raio:{name:"Raio",strong:["agua","gelo"],hex:"#f5d90a"},
+  fogo:{name:"Fogo",strong:["planta","gelo"],hex:"#f0531e"}, gelo:{name:"Gelo",strong:["planta","agua"],hex:"#9fe4ff"},
+  terra:{name:"Terra",strong:["fogo","gelo","vento"],hex:"#8a5a2b"}, planta:{name:"Planta",strong:["agua","terra"],hex:"#37b24d"},
+  vento:{name:"Vento",strong:["fogo","planta"],hex:"#c9f2e4"}, luz:{name:"Luz",strong:["trevas"],hex:"#fff6c2"},
+  trevas:{name:"Trevas",strong:["luz"],hex:"#3b2357"}
+};
+const PIECES = {nucleo:"Núcleo Mágico",peao:"Peão",torreDisparo:"Torre de Disparo",torreElemental:"Torre Elemental",catapulta:"Catapulta"};
+const DEFAULT_RULES = {
+  pecas:{
+    nucleo:{vida:100,forca:0,atq:0,andar:0,intervalo:0},
+    peao:{vida:10,forca:3,atq:1,andar:2,intervalo:5},
+    torreDisparo:{vida:12,forca:4,atq:4,andar:1,intervalo:20},
+    torreElemental:{vida:16,forca:5,atq:2,andar:1,intervalo:15},
+    catapulta:{vida:12,forca:6,atq:6,andar:1,intervalo:30}
+  },
+  manaBase:100, nucleoVidaBase:100,
+  manaPorTurno:5, custoCristal:1, bonusElemento:2, bonusVantagem:2, curaValor:6,
+  armadilhaDano:4, armadilhaDuracao:300, estruturaVida:15, seloVida:4,
+  recManaQtd:2, recManaSeg:60, recVidaQtd:2, recVidaMin:2
+};
+const RULE_LABELS = {
+  manaBase:"Mana de cada duelista", nucleoVidaBase:"Vida do núcleo de cada duelista",
+  manaPorTurno:"Mana recuperada no início do turno", custoCristal:"Mana por cristal", bonusElemento:"Dano extra do elemento",
+  bonusVantagem:"Dano extra contra elemento fraco", curaValor:"Vida recuperada por Curar", armadilhaDano:"Dano da armadilha",
+  armadilhaDuracao:"Duração da armadilha (s)", estruturaVida:"Vida da estrutura", seloVida:"Vida do selo",
+  recManaQtd:"Recuperação de mana: mana por segundo", recManaSeg:"Recuperação de mana: duração (s)",
+  recVidaQtd:"Recuperação de vida: vida por minuto", recVidaMin:"Recuperação de vida: duração (min)"
+};
+const EFFECTS = {
+  curar:{name:"Curar",target:"ownPiece",core:true,txt:r=>`Recupera ${r.curaValor} de vida de uma peça sua (o núcleo também). Clique no pergaminho e depois na peça.`},
+  ressuscitar:{name:"Ressuscitar",target:"ownTomb",txt:()=>`Revive uma peça sua que virou lápide, com a vida cheia. Clique no pergaminho e depois na lápide.`},
+  armadilha:{name:"Armadilha",target:"emptyNearOwn",txt:r=>`Arma uma armadilha numa casa vazia ao redor de uma peça sua. A peça inimiga que pisar nela sofre ${r.armadilhaDano} de dano. Dura ${Math.round(r.armadilhaDuracao/60*10)/10} min e só você a vê.`},
+  estrutura:{name:"Estrutura",target:"emptyNearOwn",txt:r=>`Ergue uma estrutura com ${r.estruturaVida} de vida numa casa vazia ao redor de uma peça sua. Ninguém atravessa e ela bloqueia ataques que passem por ela (a Catapulta atira por cima). O inimigo precisa dar a volta ou destruí-la.`},
+  selamento:{name:"Selamento",target:"enemyNearOwn",txt:r=>`Sela uma peça inimiga vizinha a uma peça sua: ela não anda até o selo (${r.seloVida} de vida) ser quebrado. O dono quebra o selo atacando a própria peça selada.`},
+  recMana:{name:"Recuperação de mana",target:"none",txt:r=>`Recupera ${r.recManaQtd} de mana a cada 1 segundo durante ${r.recManaSeg} segundos.`},
+  recVida:{name:"Recuperação de vida",target:"none",txt:r=>`Seu núcleo recupera ${r.recVidaQtd} de vida a cada 1 minuto, por ${r.recVidaMin} minutos.`}
+};
+for (const [k,e] of Object.entries(ELEMENTS)) {
+  EFFECTS[k] = {name:"Elemento "+e.name,target:"ownPiece",element:k,
+    txt:r=>`Dá o elemento ${e.name} a uma peça sua: +${r.bonusElemento} de dano em qualquer peça e mais +${r.bonusVantagem} contra peças de ${e.strong.map(s=>ELEMENTS[s].name).join(", ")}.`};
+}
+const LAYOUT = [["catapulta",0,1],["torreDisparo",0,2],["nucleo",0,4],["torreElemental",0,6],["peao",1,2],["peao",1,3],["peao",1,4],["peao",1,5]];
+const FILES = "ABCDEFGH";
+
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const clone = o => JSON.parse(JSON.stringify(o));
+const LS = {get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}};
+const keyOf = name => String(name||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();
+const validName = n => /^[A-Za-zÀ-ÿ0-9_.\-]{3,16}$/.test(n) && /^[a-z0-9_.\-]{3,16}$/.test(keyOf(n)) && !/^\.+$/.test(keyOf(n));
+const rnd6 = () => { const a=new Uint32Array(1); crypto.getRandomValues(a); return 1 + (a[0] % 6); };
+const uidStr = () => Math.random().toString(36).slice(2,10);
+const cheb = (a,b,c,d) => Math.max(Math.abs(a-c),Math.abs(b-d));
+const other = s => s==="p1"?"p2":"p1";
+const sq = (r,c) => FILES[c]+(r+1);
+const fmtS = s => s>=60 ? `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}` : `${s}s`;
+let toastT; function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,3600);}
+const b64e = a => btoa(String.fromCharCode(...a));
+const b64d = s => Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function pbkdf2(pass,salt){const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveBits"]);const bits=await crypto.subtle.deriveBits({name:"PBKDF2",salt:b64d(salt),iterations:120000,hash:"SHA-256"},k,256);return b64e(new Uint8Array(bits));}
+async function sha(s){const h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,"0")).join("");}
+const newSalt = () => b64e(crypto.getRandomValues(new Uint8Array(16)));
+const icon = (t,extra="") => `<svg viewBox="0 0 40 40" fill="currentColor" ${extra}><use href="#ico-${t}"/></svg>`;
+const gem = id => `<svg viewBox="0 0 20 20" class="gem" style="color:${CR[id]?.hex||"#555"}" fill="currentColor"><use href="#gem"/></svg>`;
+const gemsInline = ids => `<span class="gems-inline">${(ids||[]).map(gem).join("")}</span>`;
+function avatarHtml(acc,cls=""){ if(acc?.avatar) return `<div class="avatar ${cls}"><img alt="" src="${esc(acc.avatar)}"></div>`; return `<div class="avatar ${cls}">${esc((acc?.name||"?")[0].toUpperCase())}</div>`; }
+
+
+/* ================= state ================= */
+let RULES = clone(DEFAULT_RULES), COMBOS = [];
+let me = null, view = "home", adminTab = "combos";
+let editingCombo = null, comboDraft = {c:[null,null,null],effect:"curar",mana:8,cd:30};
+let aiGame=null, aiRunning=false, gameUnsub=null;
+let G=null, gameId=null, mySide=null, sel=null, inspect=null, selScroll=null, pending=[], spinning={}, busy=false;
+const timeoutSent = {}; let lastFlash=null, finishedHandled={};
+const gnow = () => Date.now() + (NET.offset||0);
+
+/* ================= storage (no aparelho) ================= */
+const Pref = window.Capacitor?.isNativePlatform?.() ? (window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin("Preferences") : window.Capacitor.Plugins.Preferences) : null;
+const STORE_KEY = "tm.store" + (window.Capacitor?.isNativePlatform?.() ? "" : (location.hash||"")); // no navegador, #a/#b simulam aparelhos diferentes
+let STORE = {accounts:{}, combos:null, rules:null, friends:{}, invites:{}, session:null, v:1};
+async function loadStore(){
+  try{ const raw = Pref ? (await Pref.get({key:STORE_KEY})).value : localStorage.getItem(STORE_KEY); if(raw) STORE = Object.assign(STORE, JSON.parse(raw)); }catch(e){}
+  if(!STORE.combos) STORE.combos = clone(DEFAULT_COMBOS);
+  COMBOS = STORE.combos; RULES = mergeRules(STORE.rules);
+}
+let saveT=null;
+function save(now){ clearTimeout(saveT); const run=async()=>{ const raw=JSON.stringify(STORE); try{ if(Pref) await Pref.set({key:STORE_KEY,value:raw}); else localStorage.setItem(STORE_KEY,raw); }catch(e){ toast("Não foi possível salvar no aparelho."); } }; if(now) return run(); saveT=setTimeout(run,200); }
+function mergeRules(src){ const r=clone(DEFAULT_RULES); if(!src) return r; for(const k of Object.keys(r)){ if(k==="pecas"){ for(const p of Object.keys(r.pecas)) Object.assign(r.pecas[p], src.pecas?.[p]||{}); } else if(typeof src[k]==="number") r[k]=src[k]; } return r; }
+const myFriends = () => (STORE.friends[me.key] ||= []);
+const myInvites = () => (STORE.invites[me.key] ||= []);
+const isFriendName = n => myFriends().some(f=>keyOf(f.name)===keyOf(n));
+
+/* ================= screens ================= */
+function showScreen(id){ for(const s of ["login","lobby","game"]) $("#scr-"+s).hidden = s!==id; window.scrollTo(0,0); }
+$("#armyL").innerHTML = ["torreElemental","peao","torreDisparo","peao"].map(t=>icon(t)).join("");
+$("#armyR").innerHTML = ["peao","torreDisparo","peao","catapulta"].map(t=>icon(t)).join("");
+function modal(html){ $("#modalCard").innerHTML=html; $("#modal").hidden=false; }
+function closeModal(){ $("#modal").hidden=true; }
+const newCode = () => { const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789", a=new Uint8Array(8); crypto.getRandomValues(a); return [...a].map(x=>A[x%A.length]).join(""); };
+
+/* ================= auth (contas locais) ================= */
+let signup=false;
+$("#lgToggle").onclick = () => { signup=!signup; $("#lgPass2Wrap").hidden=!signup; $("#lgSubmit").textContent=signup?"CRIAR CONTA":"LOGIN"; $("#lgToggle").textContent=signup?"Já tenho conta":"Cadastre-se"; $("#loginMode").textContent=signup?"Crie um nome e uma senha. Fica salvo neste aparelho.":"Entre com seu nome de duelista"; $("#lgErr").textContent=""; $("#lgPass").autocomplete=signup?"new-password":"current-password"; };
+$("#lgForgot").onclick = () => { $("#loginForm").hidden=true; $("#forgotForm").hidden=false; $("#fgName").value=$("#lgName").value; $("#fgErr").textContent=""; };
+$("#fgBack").onclick = () => { $("#loginForm").hidden=false; $("#forgotForm").hidden=true; };
+$("#loginForm").onsubmit = async e => {
+  e.preventDefault(); const err=$("#lgErr"); err.textContent="";
+  const name=$("#lgName").value.trim(), pass=$("#lgPass").value, key=keyOf(name);
+  if(!validName(name)){ err.textContent="Use de 3 a 16 letras, números, ponto, hífen ou _."; return; }
+  if(pass.length<4){ err.textContent="A senha precisa ter pelo menos 4 caracteres."; return; }
+  const btn=$("#lgSubmit"); btn.disabled=true;
+  try{
+    if(signup){
+      if(pass!==$("#lgPass2").value){ err.textContent="As senhas não conferem."; return; }
+      if(STORE.accounts[key]){ err.textContent="Esse nome já existe neste aparelho. Escolha outro."; return; }
+      const salt=newSalt(), hash=await pbkdf2(pass,salt), code=newCode(), rsalt=newSalt();
+      const first = Object.keys(STORE.accounts).length===0;
+      STORE.accounts[key]={key,name,salt,hash,rsalt,rhash:await pbkdf2(code,rsalt),avatar:null,wins:0,losses:0,isAdmin:first,createdAt:Date.now()};
+      await save(true);
+      modal(`<h2>Conta criada</h2><p>Guarde este código. Ele troca sua senha se você esquecer.</p><p style="font-family:var(--display);font-size:30px;letter-spacing:.15em;color:var(--gold2);margin:0">${code}</p>${first?`<p class="muted" style="font-size:13px">Esta é a primeira conta do aparelho, então ela é a administradora: só ela vê a página de Administração.</p>`:""}<button class="btn primary" id="mdOk">Anotei, entrar</button>`);
+      $("#mdOk").onclick=()=>{ closeModal(); enter(STORE.accounts[key]); };
+    } else {
+      const acc=STORE.accounts[key];
+      if(!acc || await pbkdf2(pass,acc.salt)!==acc.hash){ err.textContent="Nome ou senha incorretos."; return; }
+      enter(acc);
+    }
+  } finally { btn.disabled=false; }
+};
+$("#forgotForm").onsubmit = async e => {
+  e.preventDefault(); const err=$("#fgErr"); err.className="err"; err.textContent="";
+  const acc=STORE.accounts[keyOf($("#fgName").value)], code=$("#fgCode").value.trim().toUpperCase(), np=$("#fgPass").value;
+  if(np.length<4){ err.textContent="A nova senha precisa ter pelo menos 4 caracteres."; return; }
+  if(!acc || !acc.rhash || await pbkdf2(code,acc.rsalt)!==acc.rhash){ err.textContent="Nome ou código de recuperação incorretos."; return; }
+  acc.salt=newSalt(); acc.hash=await pbkdf2(np,acc.salt); await save(true);
+  err.className="okmsg"; err.textContent="Senha trocada. Volte ao login e entre com a nova senha.";
+};
+function enter(acc){
+  me=acc; STORE.session=acc.key; save();
+  $("#navAdmin").hidden=!acc.isAdmin; showScreen("lobby"); renderProfile(); renderInvitesBadge(); go("home");
+}
+function logout(){ netClose(); me=null; G=null; aiGame=null; STORE.session=null; save(); if(signup) $("#lgToggle").click(); showScreen("login"); $("#lgPass").value=""; $("#lgPass2").value=""; $("#lgErr").textContent=""; }
+$("#logout").onclick = () => logout();
+
+/* ================= lobby ================= */
+document.getElementById("nav").onclick = e => { const b=e.target.closest("[data-nav]"); if(b) go(b.dataset.nav); };
+function go(v){ view=v; for(const b of document.querySelectorAll("[data-nav]")) b.setAttribute("aria-current", b.dataset.nav===v?"true":"false"); renderPanel(); }
+function renderInvitesBadge(){ if(!me) return; const n=myInvites().length; $("#friendBadge").hidden=!n; $("#friendBadge").textContent=n; }
+function renderProfile(){
+  if(!me) return;
+  $("#profileCard").innerHTML = `
+    <div class="who">${avatarHtml(me)}<div style="min-width:0"><div class="label">Duelista</div><h2 style="font-size:22px;overflow-wrap:anywhere">${esc(me.name)}</h2></div></div>
+    <div class="statlist">
+      <div class="stat"><span class="label">Mana</span><b class="num">${RULES.manaBase}</b></div>
+      <div class="stat"><span class="label">Vida do núcleo</span><b class="num">${RULES.nucleoVidaBase}</b></div>
+      <div class="stat"><span class="label">Vitórias</span><b class="num">${me.wins||0}</b></div>
+      <div class="stat"><span class="label">Derrotas</span><b class="num">${me.losses||0}</b></div>
+    </div>
+    <button class="btn primary" data-go="play">Jogar</button>
+    <button class="btn" data-go="friends">Lista de amigos</button>`;
+}
+$("#profileCard").onclick = e => { const b=e.target.closest("[data-go]"); if(b) go(b.dataset.go); };
+
+function resumeBanner(){
+  let h="";
+  if(G && G.net && G.status==="playing" && $("#scr-game").hidden) h+=`<div class="banner"><div class="grow"><b>Duelo em andamento</b> contra ${esc(G.players[other(mySide)].name)}.</div><button class="btn gold sm" data-act="resumeNet">Voltar ao duelo</button></div>`;
+  if(aiGame && aiGame.status==="playing") h+=`<div class="banner"><div class="grow"><b>Duelo contra a IA em andamento.</b></div><button class="btn gold sm" data-act="resumeAi">Voltar ao duelo</button></div>`;
+  return h;
+}
+function renderPanel(){
+  if(!me) return; const P=$("#panel"); const resume=resumeBanner();
+  if(view==="home"){
+    const p=RULES.pecas;
+    P.innerHTML = resume + `<div class="card"><div class="panel-head"><h2>As peças</h2><button class="btn primary" data-go="play">Jogar</button></div>
+      <p class="muted" style="max-width:65ch;margin-top:0">Cada turno você tem três dados: <b>Andar</b> (quantas casas uma peça anda), <b>Atacar</b> (até onde o ataque alcança) e <b>Força</b> (quanto dano causa). O resultado nunca passa do limite da peça. Vence quem zerar o Núcleo Mágico do oponente. Todos os duelistas começam com os mesmos status.</p>
+      <div class="pieces-guide">
+      ${Object.keys(PIECES).map(t=>`<div class="pg">${icon(t)}<div class="nm">${PIECES[t]}</div><div class="st num">${t==="nucleo"?`Vida ${RULES.nucleoVidaBase} · não se move`:`Vida ${p[t].vida} · Força ${p[t].forca}<br>Ataque ${p[t].atq} · Andar ${p[t].andar}<br>Intervalo ${p[t].intervalo}s`}</div></div>`).join("")}
+      <div class="pg">${icon("estrutura")}<div class="nm">Estrutura</div><div class="st">Vida ${RULES.estruturaVida} · bloqueia passagem e tiros</div></div>
+      <div class="pg">${icon("armadilha")}<div class="nm">Armadilha</div><div class="st">${RULES.armadilhaDano} de dano · ${Math.round(RULES.armadilhaDuracao/60)} min</div></div>
+      <div class="pg">${icon("lapide")}<div class="nm">Lápide</div><div class="st">Peça derrotada · pode ser ressuscitada</div></div>
+      </div></div>`;
+  }
+  else if(view==="play"){
+    const lastIp = STORE.lastIp || "";
+    P.innerHTML = resume + `<div class="card" style="display:grid;gap:18px">
+      <div class="panel-head" style="margin:0"><h2>Jogar</h2></div>
+      <section style="display:grid;gap:10px"><h3 style="font-size:18px">Criar sala</h3>
+        <form class="form-inline" id="newRoom">
+          <div class="field"><label class="label" for="nrTitle">Título da sala</label><input id="nrTitle" maxlength="40" placeholder="Duelo dos magos" value="${esc(STORE.lastTitle||"")}" required></div>
+          <div class="field" style="max-width:160px"><label class="label" for="nrPass">Senha (opcional)</label><input id="nrPass" type="password" maxlength="20" autocomplete="off"></div>
+          <div class="field" style="max-width:150px"><label class="label" for="nrTurn">Tempo por turno</label><select id="nrTurn">${[30,60,90,120,180].map(s=>`<option value="${s}" ${s===(STORE.lastTurn||60)?"selected":""}>${fmtS(s)}</option>`).join("")}</select></div>
+        </form>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="host" data-via="tcp">Criar sala no Wi-Fi (IP)</button><button class="btn" data-act="host" data-via="bt">Criar sala por Bluetooth</button></div>
+      </section>
+      <section style="display:grid;gap:10px;border-top:1px solid var(--line);padding-top:16px"><h3 style="font-size:18px">Entrar numa sala</h3>
+        <form class="form-inline" id="joinIp"><div class="field"><label class="label" for="jIp">IP da sala</label><input id="jIp" inputmode="decimal" placeholder="192.168.0.12" value="${esc(lastIp)}" required></div><button class="btn primary" type="submit">Entrar pelo IP</button></form>
+        <p class="muted" style="margin:0;font-size:13px">Os dois aparelhos precisam estar no mesmo Wi-Fi (ou um usando o roteador/hotspot do outro).</p>
+        <div><button class="btn" data-act="btFind">Procurar sala por Bluetooth</button></div>
+        <div class="list" id="btList"></div>
+      </section>
+      <section style="display:grid;gap:10px;border-top:1px solid var(--line);padding-top:16px"><h3 style="font-size:18px">Treinar contra a IA</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="ai" data-level="facil">IA fácil</button><button class="btn gold" data-act="ai" data-level="normal">IA normal</button></div>
+      </section></div>`;
+    $("#joinIp").onsubmit = e => { e.preventDefault(); joinByIp($("#jIp").value.trim()); };
+    renderBtList();
+  }
+  else if(view==="friends"){
+    const fr=myFriends(), inv=myInvites();
+    P.innerHTML = resume + `<div class="card"><div class="panel-head"><h2>Lista de amigos</h2></div>
+      <p class="muted" style="margin-top:0;max-width:65ch">Durante um duelo ou na sala de espera, toque em “+ Adicionar amigo” no nome do oponente para enviar um convite. Os convites recebidos aparecem aqui e no próprio duelo.</p>
+      ${inv.length?`<h3 class="label" style="margin:10px 0 8px">Convites recebidos</h3><div class="list">${inv.map((v,i)=>`<div class="row"><div class="grow title">${esc(v.name)}</div><button class="btn sm primary" data-act="invOk" data-i="${i}">Aceitar</button><button class="btn sm danger" data-act="invNo" data-i="${i}">Recusar</button></div>`).join("")}</div>`:""}
+      <h3 class="label" style="margin:16px 0 8px">Amigos</h3>
+      <div class="list">${fr.map((f,i)=>`<div class="row"><div class="grow"><span class="title">${esc(f.name)}</span><div class="muted" style="font-size:13px">${[f.ip?`IP ${esc(f.ip)}`:"",f.btName||f.bt?`Bluetooth ${esc(f.btName||f.bt)}`:""].filter(Boolean).join(" · ")||"sem conexão salva"}</div></div>
+        ${f.ip?`<button class="btn sm" data-act="fIp" data-i="${i}">Entrar pelo IP</button>`:""}${f.bt?`<button class="btn sm" data-act="fBt" data-i="${i}">Entrar por Bluetooth</button>`:""}
+        <button class="btn sm ghost" data-act="fDel" data-i="${i}">Remover</button></div>`).join("") || `<div class="empty">Você ainda não tem amigos salvos neste aparelho.</div>`}</div></div>`;
+  }
+  else if(view==="profile"){
+    P.innerHTML = `<div class="card" style="display:grid;gap:22px"><div class="panel-head" style="margin:0"><h2>Perfil</h2></div>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">${avatarHtml(me)}<div class="field"><label class="label" for="avFile">Foto de perfil</label><input id="avFile" type="file" accept="image/*"></div>${me.avatar?`<button class="btn sm ghost" data-act="rmAvatar">Remover foto</button>`:""}</div>
+      <form class="form-inline" id="pwF"><div class="field"><label class="label" for="pwOld">Senha atual</label><input id="pwOld" type="password" autocomplete="current-password" required></div><div class="field"><label class="label" for="pwNew">Nova senha</label><input id="pwNew" type="password" autocomplete="new-password" required></div><button class="btn" type="submit">Trocar senha</button></form>
+      <div class="form-inline"><div style="flex:1;min-width:200px"><div class="label">Código de recuperação</div><p class="muted" style="margin:4px 0 0;font-size:13px">Gere um novo se perdeu o antigo. O código anterior deixa de valer.</p></div><button class="btn" data-act="newCode">Gerar novo código</button></div>
+      <div id="pfMsg" class="okmsg"></div></div>`;
+    $("#avFile").onchange = e => setAvatar(e.target.files[0]);
+    $("#pwF").onsubmit = async e => { e.preventDefault(); const o=$("#pwOld").value, n=$("#pwNew").value; if(n.length<4){toast("A nova senha precisa de 4 caracteres ou mais.");return;}
+      if(await pbkdf2(o,me.salt)!==me.hash){ toast("Senha atual incorreta."); return; }
+      me.salt=newSalt(); me.hash=await pbkdf2(n,me.salt); await save(true); $("#pfMsg").textContent="Senha alterada."; e.target.reset(); };
+  }
+  else if(view==="admin"){ renderAdmin(); }
+}
+document.getElementById("panel").addEventListener("click", async e => {
+  const g=e.target.closest("[data-go]"); if(g) return go(g.dataset.go);
+  const b=e.target.closest("[data-act]"); if(!b) return; const a=b.dataset.act, i=+b.dataset.i;
+  if(a==="resumeAi") openLocal(aiGame);
+  else if(a==="resumeNet"){ showScreen("game"); renderGame(); }
+  else if(a==="ai") startAiGame(b.dataset.level);
+  else if(a==="host") hostRoom(b.dataset.via);
+  else if(a==="btFind") btFind();
+  else if(a==="btJoin") joinByBt(b.dataset.addr, b.dataset.name);
+  else if(a==="invOk"){ const v=myInvites().splice(i,1)[0]; addFriendLocal(v); save(); renderInvitesBadge(); renderPanel(); toast(`${v.name} agora é seu amigo.`); if(NET.connected) netSend({t:"friendOk",name:me.name}); }
+  else if(a==="invNo"){ myInvites().splice(i,1); save(); renderInvitesBadge(); renderPanel(); }
+  else if(a==="fIp") joinByIp(myFriends()[i].ip);
+  else if(a==="fBt") joinByBt(myFriends()[i].bt, myFriends()[i].btName);
+  else if(a==="fDel"){ myFriends().splice(i,1); save(); renderPanel(); }
+  else if(a==="rmAvatar"){ me.avatar=null; save(); renderProfile(); renderPanel(); }
+  else if(a==="newCode"){ const code=newCode(); me.rsalt=newSalt(); me.rhash=await pbkdf2(code,me.rsalt); await save(true); modal(`<h2>Novo código</h2><p>Guarde este código de recuperação:</p><p style="font-family:var(--display);font-size:30px;letter-spacing:.15em;color:var(--gold2);margin:0">${code}</p><button class="btn primary" id="mdOk">Anotei</button>`); $("#mdOk").onclick=closeModal; }
+  else adminClick(a,b);
+});
+function addFriendLocal(v){ const fr=myFriends(); const ex=fr.find(f=>keyOf(f.name)===keyOf(v.name)); const rec={name:v.name, ip:v.ip||ex?.ip||null, bt:v.bt||ex?.bt||null, btName:v.btName||ex?.btName||null, at:Date.now()}; if(ex) Object.assign(ex,rec); else fr.push(rec); }
+function setAvatar(file){
+  if(!file) return; const img=new Image(); const url=URL.createObjectURL(file);
+  img.onload=()=>{ const c=document.createElement("canvas"); c.width=c.height=112; const x=c.getContext("2d"); const s=Math.min(img.width,img.height);
+    x.drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,112,112); URL.revokeObjectURL(url); me.avatar=c.toDataURL("image/jpeg",.8); save(); renderProfile(); renderPanel(); toast("Foto atualizada."); };
+  img.onerror=()=>toast("Esse arquivo não é uma imagem válida."); img.src=url;
+}
+
+/* ================= conexão entre aparelhos ================= */
+const NATIVE = !!window.Capacitor?.isNativePlatform?.();
+const Link = NATIVE ? (window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin("Link") : window.Capacitor.Plugins.Link) : makeSimLink();
+const NET = {role:null, via:null, connected:false, room:null, peerAddr:null, peerName:null, offset:0, lastJoin:null, btName:null, stage:null, roomInfo:null, sentFriend:false};
+const PROTO = 1;
+let btFound = [];
+async function netSend(msg){ try{ await Link.send({data:JSON.stringify(msg)}); }catch(e){ /* disconnected handler shows the state */ } }
+async function netClose(){ try{ await Link.close(); }catch(e){} Object.assign(NET,{role:null,via:null,connected:false,room:null,peerAddr:null,peerName:null,offset:0,stage:null,roomInfo:null,sentFriend:false}); $("#netOverlay").hidden=true; }
+function netCard(html){ $("#netCard").innerHTML=html; $("#netOverlay").hidden=false; }
+document.getElementById("netCard").addEventListener("click", e => { const b=e.target.closest("[data-net]"); if(!b) return; const a=b.dataset.net;
+  if(a==="cancel"){ netClose(); }
+  else if(a==="visible"){ Link.btDiscoverable().catch(()=>toast("Não foi possível deixar o aparelho visível.")); }
+  else if(a==="retry" && NET.lastJoin){ const j=NET.lastJoin; j.via==="tcp"?joinByIp(j.ip):joinByBt(j.addr,j.name); }
+  else if(a==="closeOverlay"){ $("#netOverlay").hidden=true; }
+});
+
+async function ensureBt(){
+  try{
+    let st=await Link.btStatus(); if(!st.available){ toast("Este aparelho não tem Bluetooth."); return false; }
+    if(!st.granted){ const r=await Link.btPermissions(); if(!r.granted){ toast("Sem a permissão de Bluetooth não dá para jogar por Bluetooth."); return false; } }
+    st=await Link.btStatus(); if(!st.enabled){ await Link.btEnable(); toast("Ligue o Bluetooth e toque de novo."); return false; }
+    return true;
+  }catch(e){ toast(e?.message||"Bluetooth indisponível."); return false; }
+}
+async function hostRoom(via){
+  const title=$("#nrTitle").value.trim(); if(!title){ toast("Dê um título para a sala."); $("#nrTitle").focus(); return; }
+  const pass=$("#nrPass").value, turnSec=+$("#nrTurn").value; STORE.lastTitle=title; STORE.lastTurn=turnSec; save();
+  if(G && G.net && G.status==="playing"){ toast("Termine ou desista do duelo atual antes de criar outra sala."); return; }
+  await netClose(); const salt=uidStr();
+  NET.room={title,hasPass:!!pass,passHash:pass?await sha("tm:"+salt+":"+pass):null,salt,turnSec}; NET.role="host"; NET.via=via; NET.stage="waiting";
+  try{
+    if(via==="tcp"){
+      const {ip,port}=await Link.getLocalIp(); await Link.tcpHost({port});
+      if(!ip){ netCard(`<h2>Sem Wi-Fi</h2><p>Conecte o aparelho a uma rede Wi-Fi (ou ligue o roteador/hotspot) e tente de novo.</p><button class="btn" data-net="cancel">Fechar</button>`); return; }
+      netCard(`<span class="label">Sala aberta no Wi-Fi</span><h2 style="font-size:24px">${esc(title)}</h2><p style="margin:0">Peça para o outro jogador digitar este IP em <b>Jogar → Entrar pelo IP</b>:</p>
+        <p class="bigip num">${esc(ip)}</p><p class="muted" style="margin:0;font-size:13px">Turnos de ${fmtS(turnSec)}${pass?" · com senha":""} · aguardando oponente…</p><button class="btn danger" data-net="cancel">Fechar sala</button>`);
+    } else {
+      if(!(await ensureBt())){ NET.role=null; return; }
+      const r=await Link.btHost(); NET.btName=r.name;
+      netCard(`<span class="label">Sala aberta por Bluetooth</span><h2 style="font-size:24px">${esc(title)}</h2><p style="margin:0">O outro jogador deve tocar em <b>Procurar sala por Bluetooth</b> e escolher:</p>
+        <p class="bigip">${esc(r.name||"este aparelho")}</p><p class="muted" style="margin:0;font-size:13px">Se os aparelhos ainda não foram pareados, deixe este visível para o outro encontrar.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn" data-net="visible">Ficar visível</button><button class="btn danger" data-net="cancel">Fechar sala</button></div>`);
+    }
+  }catch(e){ NET.role=null; netCard(`<h2>Não deu para abrir a sala</h2><p>${esc(e?.message||"Erro desconhecido.")}</p><button class="btn" data-net="cancel">Fechar</button>`); }
+}
+async function joinByIp(ip){
+  if(!ip){ toast("Digite o IP da sala."); return; }
+  if(G && G.net && G.status==="playing" && NET.connected){ toast("Você já está num duelo."); return; }
+  await netClose(); STORE.lastIp=ip; save(); NET.role="guest"; NET.via="tcp"; NET.stage="connecting"; NET.lastJoin={via:"tcp",ip};
+  netCard(`<h2>Conectando…</h2><p>Procurando a sala no IP <b class="num">${esc(ip)}</b>.</p><button class="btn" data-net="cancel">Cancelar</button>`);
+  try{ await Link.tcpJoin({ip}); }catch(e){ if(NET.role!=="guest") return; NET.stage=null; netCard(`<h2>Sala não encontrada</h2><p>${esc(e?.message||"Não foi possível conectar.")}</p><div style="display:flex;gap:8px;justify-content:center"><button class="btn" data-net="retry">Tentar de novo</button><button class="btn ghost" data-net="cancel">Fechar</button></div>`); }
+}
+async function btFind(){
+  if(!(await ensureBt())) return; btFound=[];
+  try{ const r=await Link.btPaired(); btFound=(r.devices||[]).map(d=>({...d,paired:true})); }catch(e){}
+  renderBtList(true);
+  try{ await Link.btScan(); }catch(e){ toast(e?.message||"Não foi possível procurar aparelhos."); }
+}
+function renderBtList(scanning){
+  const L=document.getElementById("btList"); if(!L) return;
+  if(!btFound.length){ L.innerHTML = scanning?`<div class="empty">Procurando aparelhos…</div>`:""; return; }
+  L.innerHTML = btFound.map(d=>`<div class="row"><div class="grow"><span class="title">${esc(d.name||"Aparelho sem nome")}</span> <span class="muted" style="font-size:12px">${d.paired?"pareado":"por perto"}</span></div><button class="btn sm primary" data-act="btJoin" data-addr="${esc(d.address)}" data-name="${esc(d.name||"")}">Entrar</button></div>`).join("");
+}
+async function joinByBt(addr,name){
+  if(!addr) return; if(!(await ensureBt())) return;
+  await netClose(); NET.role="guest"; NET.via="bt"; NET.stage="connecting"; NET.lastJoin={via:"bt",addr,name};
+  netCard(`<h2>Conectando…</h2><p>Conectando por Bluetooth a <b>${esc(name||addr)}</b>.</p><button class="btn" data-net="cancel">Cancelar</button>`);
+  try{ await Link.btJoin({address:addr}); }catch(e){ if(NET.role!=="guest") return; NET.stage=null; netCard(`<h2>Não conectou</h2><p>${esc(e?.message||"Não foi possível conectar.")}</p><div style="display:flex;gap:8px;justify-content:center"><button class="btn" data-net="retry">Tentar de novo</button><button class="btn ghost" data-net="cancel">Fechar</button></div>`); }
+}
+
+/* link events */
+Link.addListener("btDevice", d => { if(!d?.address || btFound.some(x=>x.address===d.address)) return; btFound.push({name:d.name,address:d.address,paired:false}); renderBtList(true); });
+Link.addListener("btScanDone", () => renderBtList(false));
+Link.addListener("connected", d => {
+  NET.connected=true; NET.peerAddr=d.address||null;
+  if(NET.role==="host"){ netSend({t:"room",v:PROTO,title:NET.room.title,hasPass:NET.room.hasPass,salt:NET.room.salt,turnSec:NET.room.turnSec,host:me.name,hostAvatar:null}); }
+  else { netSend({t:"ping",t0:Date.now()}); }
+  renderNetBanner();
+});
+Link.addListener("disconnected", d => {
+  const wasPlaying = G && G.net && G.status==="playing";
+  NET.connected=false; NET.sentFriend=false;
+  if(NET.role==="host"){
+    if(wasPlaying){ toast(`${NET.peerName||"O oponente"} desconectou. A sala continua aberta para ele voltar.`); }
+    else if(NET.stage==="waiting"||NET.stage==="joining"){ NET.stage="waiting"; }
+  } else if(NET.role==="guest"){
+    if(wasPlaying){ toast("Conexão perdida com a sala."); }
+    else if(NET.stage && NET.stage!=="connecting"){ netCard(`<h2>Conexão encerrada</h2><p>${esc(d?.reason||"A sala foi fechada.")}</p><div style="display:flex;gap:8px;justify-content:center"><button class="btn" data-net="retry">Tentar de novo</button><button class="btn ghost" data-net="cancel">Fechar</button></div>`); }
+  }
+  renderNetBanner();
+});
+Link.addListener("error", d => toast(d?.message||"Erro de conexão."));
+Link.addListener("data", d => { let m; try{ m=JSON.parse(d.line); }catch(e){ return; } onNet(m); });
+
+async function onNet(m){
+  if(m.t==="room" && NET.role==="guest"){
+    NET.roomInfo=m; NET.stage="room"; NET.peerName=m.host;
+    if(m.v!==PROTO){ netCard(`<h2>Versões diferentes</h2><p>O app do outro jogador é de outra versão. Atualizem os dois aparelhos.</p><button class="btn" data-net="cancel">Fechar</button>`); return; }
+    // reconexão a um duelo em andamento
+    if(G && G.net && G.status==="playing" && G.players.p1.name===m.host){ netSend({t:"join",name:me.name,pass:null,resume:true}); netCard(`<h2>Reconectando…</h2><p>Voltando ao duelo contra ${esc(m.host)}.</p>`); return; }
+    netCard(`<span class="label">Sala de ${esc(m.host)}</span><h2 style="font-size:24px">${esc(m.title)}</h2><p class="muted" style="margin:0">Turnos de ${fmtS(m.turnSec)}</p>
+      <form id="roomJoinF" style="display:grid;gap:10px">${m.hasPass?`<div class="field"><label class="label" for="rjPass">Senha da sala</label><input id="rjPass" type="password" required></div>`:""}
+      <div class="err" id="rjErr"></div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${!isFriendName(m.host)?`<button class="btn ghost" type="button" id="rjFriend">+ Adicionar amigo</button>`:""}<button class="btn primary" type="submit">Entrar no duelo</button><button class="btn ghost" type="button" data-net="cancel">Sair</button></div></form>`);
+    const f=document.getElementById("rjFriend"); if(f) f.onclick=()=>sendFriendReq();
+    $("#roomJoinF").onsubmit=async e=>{ e.preventDefault(); const p=document.getElementById("rjPass")?.value||""; NET.stage="joining";
+      netSend({t:"join",name:me.name,pass:m.hasPass?await sha("tm:"+m.salt+":"+p):null}); };
+  }
+  else if(m.t==="ping" && NET.role==="host"){ netSend({t:"pong",t0:m.t0,th:Date.now()}); }
+  else if(m.t==="pong" && NET.role==="guest"){ const now=Date.now(); NET.offset = m.th - (m.t0+now)/2; }
+  else if(m.t==="join" && NET.role==="host"){
+    const name=String(m.name||"").slice(0,16); NET.peerName=name;
+    if(G && G.net && G.status==="playing"){
+      if(keyOf(G.players.p2.name)===keyOf(name)){ netSend({t:"start",g:G}); toast(`${name} voltou ao duelo.`); renderNetBanner(); return; }
+      netSend({t:"reject",msg:"Essa sala já está num duelo."}); setTimeout(()=>Link.disconnect().catch(()=>{}),300); return;
+    }
+    if(NET.room.hasPass && m.pass!==NET.room.passHash){ netSend({t:"reject",msg:"Senha da sala incorreta."}); return; }
+    if(keyOf(name)===me.key){ netSend({t:"reject",msg:"Você está usando o mesmo nome de quem criou a sala. Entre com outra conta."}); setTimeout(()=>Link.disconnect().catch(()=>{}),300); return; }
+    const g=newGame("net-"+Date.now(),{title:NET.room.title,turnSec:NET.room.turnSec},me,{key:keyOf(name),name}); g.net=true; g.seq=1; g.via=NET.via;
+    netSend({t:"start",g}); NET.stage="playing"; $("#netOverlay").hidden=true; openNetGame(g);
+  }
+  else if(m.t==="reject" && NET.role==="guest"){ NET.stage="room"; const er=document.getElementById("rjErr"); if(er) er.textContent=m.msg; else netCard(`<h2>Não deu para entrar</h2><p>${esc(m.msg)}</p><button class="btn" data-net="cancel">Fechar</button>`); }
+  else if(m.t==="start" && NET.role==="guest"){ NET.stage="playing"; $("#netOverlay").hidden=true; openNetGame(m.g); }
+  else if(m.t==="state" && G && G.net && m.g && m.g.roomId===G.roomId && (m.g.seq||0)>(G.seq||0)){ applyRemote(m.g); }
+  else if(m.t==="friend"){ const nm=String(m.name||"").slice(0,16); if(isFriendName(nm)) { netSend({t:"friendOk",name:me.name}); return; }
+    const inv=myInvites(); if(!inv.some(v=>keyOf(v.name)===keyOf(nm))) inv.push({name:nm,...peerContact(),at:Date.now()}); save(); renderInvitesBadge();
+    showFriendPrompt(nm); }
+  else if(m.t==="friendOk"){ const nm=String(m.name||"").slice(0,16); addFriendLocal({name:nm,...peerContact()}); STORE.invites[me.key]=myInvites().filter(v=>keyOf(v.name)!==keyOf(nm)); save(); renderInvitesBadge(); toast(`${nm} aceitou. Agora vocês são amigos.`); if(G) renderCards(); }
+  else if(m.t==="leave"){ toast(`${NET.peerName||"O oponente"} saiu da sala.`); }
+}
+function peerContact(){ return NET.via==="tcp" ? {ip: NET.role==="guest" ? NET.lastJoin?.ip : NET.peerAddr} : {bt: NET.role==="guest" ? NET.lastJoin?.addr : NET.peerAddr, btName: NET.role==="guest" ? NET.lastJoin?.name : null}; }
+function sendFriendReq(){ if(!NET.connected){ toast("Sem conexão com o oponente."); return; } netSend({t:"friend",name:me.name}); NET.sentFriend=true; toast("Convite de amizade enviado."); const f=document.getElementById("rjFriend"); if(f) f.hidden=true; if(G) renderCards(); }
+function showFriendPrompt(nm){
+  modal(`<h2>Convite de amizade</h2><p><b>${esc(nm)}</b> quer ser seu amigo.</p><div style="display:flex;gap:8px;justify-content:center"><button class="btn primary" id="fpOk">Aceitar</button><button class="btn ghost" id="fpNo">Depois</button></div>`);
+  $("#fpOk").onclick=()=>{ const inv=myInvites(); const v=inv.find(x=>keyOf(x.name)===keyOf(nm)); STORE.invites[me.key]=inv.filter(x=>x!==v); addFriendLocal(v||{name:nm,...peerContact()}); save(); renderInvitesBadge(); netSend({t:"friendOk",name:me.name}); closeModal(); toast(`${nm} agora é seu amigo.`); if(G) renderCards(); if(view==="friends") renderPanel(); };
+  $("#fpNo").onclick=closeModal;
+}
+function renderNetBanner(){
+  const B=$("#gNetBanner"), L=$("#gLink"); if(!G||!G.net){ B.hidden=true; L.hidden=true; return; }
+  L.hidden=false; L.innerHTML=`<span class="dot ${NET.connected?"on":""}"></span>${G.via==="bt"?"Bluetooth":"Wi-Fi"}`;
+  if(NET.connected || G.status!=="playing"){ B.hidden=true; return; }
+  B.hidden=false;
+  B.innerHTML = NET.role==="host"
+    ? `<div class="grow"><b>${esc(G.players.p2.name)} desconectou.</b> A sala continua aberta: ele pode entrar de novo pelo mesmo ${G.via==="bt"?"Bluetooth":"IP"}.</div>`
+    : `<div class="grow"><b>Conexão perdida.</b> O duelo fica pausado até você voltar.</div><button class="btn sm gold" id="nbRetry">Reconectar</button>`;
+  const r=document.getElementById("nbRetry"); if(r) r.onclick=()=>{ const j=NET.lastJoin; if(!j) return; j.via==="tcp"?reconnectIp(j.ip):reconnectBt(j.addr,j.name); };
+}
+async function reconnectIp(ip){ NET.role="guest"; NET.via="tcp"; toast("Reconectando…"); try{ await Link.tcpJoin({ip}); }catch(e){ toast(e?.message||"Não foi possível reconectar."); } }
+async function reconnectBt(addr,name){ NET.role="guest"; NET.via="bt"; toast("Reconectando…"); try{ await Link.btJoin({address:addr}); }catch(e){ toast(e?.message||"Não foi possível reconectar."); } }
+
+/* simulated link for testing in a normal browser (two tabs on the same computer) */
+function makeSimLink(){
+  const ch = ("BroadcastChannel" in window) ? new BroadcastChannel("tm-sim") : null;
+  const id = Math.random().toString(36).slice(2); let hosting=false, peer=null; const ls={};
+  const emit=(ev,d)=>(ls[ev]||[]).forEach(f=>f(d));
+  const post=m=>ch&&ch.postMessage({...m,from:id});
+  ch && (ch.onmessage = ({data:m}) => {
+    if(m.to && m.to!==id) return;
+    if(m.k==="hello" && hosting && !peer){ peer=m.from; post({k:"accept",to:m.from}); emit("connected",{via:"sim",address:"127.0.0.1"}); }
+    else if(m.k==="accept" && pendingJoin){ peer=m.from; const r=pendingJoin; pendingJoin=null; emit("connected",{via:"sim",address:"127.0.0.1"}); r(); }
+    else if(m.k==="data" && m.from===peer) emit("data",{line:m.data});
+    else if(m.k==="bye" && m.from===peer){ peer=null; emit("disconnected",{reason:"O outro jogador saiu."}); }
+  });
+  let pendingJoin=null;
+  const join=()=>new Promise((res,rej)=>{ pendingJoin=res; post({k:"hello"}); setTimeout(()=>{ if(pendingJoin){ pendingJoin=null; rej({message:"Não encontrei uma sala nesse IP. (modo de teste: abra a sala em outra aba)"}); } },1500); });
+  return {
+    addListener(ev,f){ (ls[ev] ||= []).push(f); return {remove(){}}; },
+    async getLocalIp(){ return {ip:"127.0.0.1",port:47800}; },
+    async tcpHost(){ hosting=true; }, async btHost(){ hosting=true; return {name:"Aparelho de teste"}; },
+    tcpJoin: join, btJoin: join,
+    async btStatus(){ return {available:true,enabled:true,granted:true}; }, async btPermissions(){ return {granted:true}; },
+    async btEnable(){}, async btDiscoverable(){}, async btPaired(){ return {devices:[{name:"Aparelho de teste",address:"SIM"}]}; },
+    async btScan(){ setTimeout(()=>emit("btScanDone",{}),300); },
+    async send({data}){ if(!peer) throw {message:"Sem conexão."}; post({k:"data",to:peer,data}); },
+    async disconnect(){ if(peer){ post({k:"bye",to:peer}); peer=null; emit("disconnected",{reason:"Conexão encerrada."}); } },
+    async close(){ if(peer){ post({k:"bye",to:peer}); } peer=null; hosting=false; }
+  };
+}
+
+/* ================= game: sync ================= */
+function newGame(id,r,host,guest){
+  const now=gnow(), pieces=[]; let n=0; const rules=clone(RULES);
+  const mana={p1:rules.manaBase,p2:rules.manaBase}, manaMax={p1:rules.manaBase,p2:rules.manaBase};
+  for(const side of ["p1","p2"]) for(const [t,row,col] of LAYOUT){ const max=t==="nucleo"?rules.nucleoVidaBase:rules.pecas[t].vida;
+      pieces.push({id:"k"+(n++),owner:side,type:t,r:side==="p1"?row:7-row,c:col,hp:max,maxHp:max,element:null,cdUntil:0,sealHp:0,dead:false}); }
+  const emptyS=()=>[{state:"empty"},{state:"empty"},{state:"empty"}];
+  return {roomId:id,title:r.title,status:"playing",winner:null,players:{p1:{key:host.key,name:host.name},p2:{key:guest.key,name:guest.name}},
+    turn:"p1",turnNo:1,turnSec:r.turnSec,turnEndsAt:now+r.turnSec*1000+2000,dice:freshDice(),pieces,structures:[],traps:[],mana,manaMax,timed:[],
+    scrolls:{p1:emptyS(),p2:emptyS()},cds:{p1:{},p2:{}},rules,combos:clone(COMBOS.length?COMBOS:DEFAULT_COMBOS),log:[{t:now,x:`Duelo iniciado. ${host.name} começa.`}],createdAt:now,updatedAt:now};
+}
+const freshDice = () => ({andar:{v:null,used:false},atacar:{v:null,used:false},forca:{v:null,used:false}});
+function openNetGame(g){
+  G=clone(g); gameId=g.roomId; mySide = keyOf(G.players.p1.name)===me.key ? "p1" : "p2";
+  sel=inspect=selScroll=null; pending=[]; spinning={};
+  showScreen("game"); $("#endOverlay").hidden=true; renderGame(); renderNetBanner();
+  if(G.status==="finished") onFinished();
+}
+function applyRemote(g){
+  const prev=G; G=clone(g);
+  if(prev.turn!==G.turn && G.turn===mySide) toast("Sua vez!");
+  if(prev.turnNo!==G.turnNo){ spinning={}; pending=[]; selScroll=null; }
+  if(!$("#scr-game").hidden) renderGame(); if(G.status==="finished") onFinished();
+}
+$("#gBack").onclick = () => { $("#endOverlay").hidden=true;
+  if(G && G.net && G.status==="finished"){ netClose(); G=null; }
+  else if(G && G.ai){ G=null; }
+  showScreen("lobby"); renderProfile(); renderPanel(); };
+function settle(g,now){
+  for(const e of g.timed){ const due=Math.min(e.total,Math.floor((now-e.start)/e.every)); const add=(due-e.done)*e.amt;
+    if(add>0){ if(e.kind==="mana") g.mana[e.owner]=Math.min(g.manaMax[e.owner],g.mana[e.owner]+add); else { const c=g.pieces.find(p=>p.owner===e.owner&&p.type==="nucleo"); if(c) c.hp=Math.min(c.maxHp,c.hp+add); } }
+    e.done=due; }
+  g.timed=g.timed.filter(e=>e.done<e.total); g.traps=g.traps.filter(t=>t.until>now); return g;
+}
+const V = () => settle(clone(G),gnow());
+const isMyTurn = () => G && G.status==="playing" && G.turn===mySide && (!G.net || NET.connected);
+function addLog(g,x){ g.log.push({t:Date.now(),x}); if(g.log.length>40) g.log=g.log.slice(-40); }
+async function commit(fn){
+  if(busy||!G) return; if(G.net && !NET.connected){ toast("Sem conexão com o oponente. A jogada não foi feita."); return; }
+  busy=true;
+  try{ const g=clone(G), now=gnow(); settle(g,now); if(fn(g,now)===false) return; g.updatedAt=now; g.seq=(g.seq||0)+1; G=g; renderGame();
+    if(g.ai){ aiGame=g; if(g.status==="finished") onFinished(); else setTimeout(maybeAi,0); return; }
+    if(g.net){ await netSend({t:"state",g}); if(g.status==="finished") onFinished(); }
+  } finally { busy=false; }
+}
+function endTurn(g,now,why){
+  const nx=other(g.turn); addLog(g, why==="tempo"?`Tempo esgotado para ${g.players[g.turn].name}.`:`${g.players[g.turn].name} passou a vez.`);
+  g.turn=nx; g.turnNo++; g.turnEndsAt=now+g.turnSec*1000; g.dice=freshDice();
+  g.mana[nx]=Math.min(g.manaMax[nx],g.mana[nx]+g.rules.manaPorTurno);
+}
+$("#gPass").onclick = () => { if(!isMyTurn()) return toast("Espere a sua vez."); const tn=G.turnNo; commit((g,now)=>{ if(g.turnNo!==tn) return false; endTurn(g,now,"passou"); }); };
+$("#gQuit").onclick = () => { if(G?.status==="playing" && mySide) $("#confirmQuit").hidden=false; };
+$("#cqNo").onclick = () => $("#confirmQuit").hidden=true;
+$("#cqYes").onclick = () => { $("#confirmQuit").hidden=true;
+  if(G.net && !NET.connected){ G.status="finished"; G.winner=other(mySide); addLog(G,`${G.players[mySide].name} desistiu.`); renderGame(); onFinished(); return; }
+  commit(g=>{ if(g.status!=="playing") return false; g.status="finished"; g.winner=other(mySide); addLog(g,`${g.players[mySide].name} desistiu.`); }); };
+function onFinished(){
+  const won = G.winner===mySide; const o=$("#endOverlay");
+  o.innerHTML = `<div class="card"><h2>${won?"Vitória!":"Derrota"}</h2><p>${esc(G.players[G.winner]?.name||"")} venceu o duelo.</p><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn" id="eoView">Ver tabuleiro</button><button class="btn primary" id="eoBack">Voltar ao menu</button></div></div>`;
+  o.hidden=false; $("#eoBack").onclick=()=>{ o.hidden=true; $("#gBack").click(); }; $("#eoView").onclick=()=>o.hidden=true;
+  if(finishedHandled[G.roomId]) return; finishedHandled[G.roomId]=1;
+  if(won) me.wins=(me.wins||0)+1; else me.losses=(me.losses||0)+1; save(); renderProfile();
+}
+setInterval(()=>{
+  if(!G||$("#scr-game").hidden) return; renderClock();
+  if(G.status!=="playing"||!mySide) return; if(G.net && !NET.connected) return;
+  const now=gnow(), tn=G.turnNo;
+  const late = G.turn===mySide ? now>G.turnEndsAt : now>G.turnEndsAt+5000;
+  if(late && !timeoutSent[G.roomId+tn]){ timeoutSent[G.roomId+tn]=1; commit((g,n)=>{ if(g.turnNo!==tn||g.status!=="playing") return false; endTurn(g,n,"tempo"); }); }
+},500);
+setInterval(()=>{ if(G && !$("#scr-game").hidden){ renderBoard(); renderCards(); } },1000);
+
+/* ================= game: rules ================= */
+const statOf = p => G.rules.pecas[p.type];
+const at = (g,r,c) => g.pieces.find(p=>p.r===r&&p.c===c);
+const structAt = (g,r,c) => g.structures.find(s=>s.r===r&&s.c===c);
+const trapAt = (g,r,c) => g.traps.find(t=>t.r===r&&t.c===c);
+const D8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+function moveTargets(g,p){
+  const out=new Map(); const d=g.dice.andar; const st=statOf(p);
+  if(!d.v||d.used||p.dead||p.sealHp>0||st.andar<=0) return out;
+  const lim=Math.min(d.v,st.andar); const seen=new Map([[p.r+","+p.c,null]]); let fr=[[p.r,p.c]];
+  for(let s=0;s<lim;s++){ const nx=[]; for(const [r,c] of fr) for(const [dr,dc] of D8){ const R=r+dr,C=c+dc,k=R+","+C;
+      if(R<0||R>7||C<0||C>7||seen.has(k)||at(g,R,C)||structAt(g,R,C)) continue; const tr=trapAt(g,R,C); if(tr&&tr.owner===p.owner) continue;
+      seen.set(k,r+","+c); nx.push([R,C]); out.set(k,true); } fr=nx; }
+  for(const k of out.keys()){ const path=[]; let cur=k; while(cur && cur!==p.r+","+p.c){ path.unshift(cur.split(",").map(Number)); cur=seen.get(cur); } out.set(k,path); }
+  return out;
+}
+function lineClear(g,a,b,c,d){
+  const n=Math.max(Math.abs(c-a),Math.abs(d-b)); for(let i=1;i<n;i++){ const r=Math.round(a+(c-a)*i/n), cc=Math.round(b+(d-b)*i/n); if(structAt(g,r,cc)) return false; } return true;
+}
+function attackTargets(g,p,now){
+  const out=new Map(); const A=g.dice.atacar,F=g.dice.forca; const st=statOf(p);
+  if(!A.v||A.used||!F.v||F.used||p.dead||st.forca<=0||st.atq<=0||p.cdUntil>now) return out;
+  const range=Math.min(A.v,st.atq), lob=p.type==="catapulta";
+  for(const q of g.pieces){ if(q.dead) continue; const enemy=q.owner!==p.owner, seal=q.owner===p.owner&&q.sealHp>0;
+    if(!enemy&&!seal) continue; const d=cheb(p.r,p.c,q.r,q.c); if(d>range) continue; if(d>1&&!lob&&!lineClear(g,p.r,p.c,q.r,q.c)) continue;
+    out.set(q.r+","+q.c,{kind:seal?"seal":"piece",id:q.id}); }
+  for(const s of g.structures){ if(s.owner===p.owner) continue; const d=cheb(p.r,p.c,s.r,s.c); if(d>range) continue; if(d>1&&!lob&&!lineClear(g,p.r,p.c,s.r,s.c)) continue; out.set(s.r+","+s.c,{kind:"struct",id:s.id}); }
+  return out;
+}
+function damageOf(g,att,target){
+  const st=g.rules.pecas[att.type]; let d=Math.min(g.dice.forca.v,st.forca), parts=[`${d} de força`];
+  if(att.element){ d+=g.rules.bonusElemento; parts.push(`+${g.rules.bonusElemento} ${ELEMENTS[att.element].name}`);
+    if(target?.element && ELEMENTS[att.element].strong.includes(target.element)){ d+=g.rules.bonusVantagem; parts.push(`+${g.rules.bonusVantagem} vantagem`); } }
+  return {d,parts};
+}
+function kill(g,p){
+  if(p.type==="nucleo"){ p.hp=0; g.status="finished"; g.winner=other(p.owner); addLog(g,`O Núcleo de ${g.players[p.owner].name} foi destruído!`); return; }
+  p.dead=true; p.hp=0; p.sealHp=0; p.element=null; addLog(g,`${PIECES[p.type]} de ${g.players[p.owner].name} caiu e virou lápide em ${sq(p.r,p.c)}.`);
+}
+function doMove(pid,r,c){
+  return commit((g,now)=>{ const p=g.pieces.find(x=>x.id===pid); const paths=moveTargets(g,p); const path=paths.get(r+","+c); if(!path) return false;
+    const from=sq(p.r,p.c); let stop=null;
+    for(const [R,C] of path){ p.r=R; p.c=C; const t=trapAt(g,R,C); if(t&&t.owner!==p.owner){ stop=t; break; } }
+    g.dice.andar.used=true; addLog(g,`${PIECES[p.type]} andou de ${from} para ${sq(p.r,p.c)}.`);
+    if(stop){ g.traps=g.traps.filter(t=>t!==stop); p.hp-=g.rules.armadilhaDano; addLog(g,`Armadilha em ${sq(p.r,p.c)}! ${PIECES[p.type]} sofreu ${g.rules.armadilhaDano} de dano.`); if(p.hp<=0) kill(g,p); lastFlash=p.r+","+p.c; }
+  });
+}
+function doAttack(pid,t){
+  return commit((g,now)=>{ const p=g.pieces.find(x=>x.id===pid); const opts=attackTargets(g,p,now);
+    const tg = t.kind==="struct" ? g.structures.find(s=>s.id===t.id) : g.pieces.find(x=>x.id===t.id); if(!tg||!opts.has(tg.r+","+tg.c)) return false;
+    const {d,parts}=damageOf(g,p,t.kind==="piece"?tg:null); const nm=PIECES[p.type];
+    if(t.kind==="seal"){ tg.sealHp=Math.max(0,tg.sealHp-d); addLog(g,`${nm} golpeou o selo em ${sq(tg.r,tg.c)} (${d}). ${tg.sealHp?`Restam ${tg.sealHp}.`:"Selo quebrado!"}`); }
+    else if(t.kind==="struct"){ tg.hp-=d; addLog(g,`${nm} atingiu a estrutura em ${sq(tg.r,tg.c)}: ${d} de dano.`); if(tg.hp<=0){ g.structures=g.structures.filter(s=>s!==tg); addLog(g,"A estrutura desabou."); } }
+    else { tg.hp-=d; addLog(g,`${nm} atacou ${PIECES[tg.type]} em ${sq(tg.r,tg.c)}: ${d} de dano (${parts.join(", ")}).`); if(tg.hp<=0) kill(g,tg); }
+    g.dice.atacar.used=g.dice.forca.used=true; p.cdUntil=now+g.rules.pecas[p.type].intervalo*1000; lastFlash=tg.r+","+tg.c;
+  });
+}
+
+/* ---- scrolls & effects ---- */
+const DEFAULT_COMBOS = [["verde","verde","branco","curar",8,30],["branco","amarelo","prata","ressuscitar",20,120],["preto","marrom","vermelho","armadilha",10,45],["marrom","marrom","prata","estrutura",10,45],["roxo","preto","prata","selamento",12,60],["celeste","marinho","branco","recMana",5,120],["verde","menta","pessego","recVida",8,120],["celeste","celeste","marinho","agua",6,30],["amarelo","amarelo","violeta","raio",6,30],["vermelho","laranja","laranja","fogo",6,30],["celeste","branco","branco","gelo",6,30],["marrom","verde","laranja","terra",6,30],["verde","verde","menta","planta",6,30],["menta","prata","celeste","vento",6,30],["amarelo","branco","pessego","luz",6,30],["preto","preto","violeta","trevas",6,30]].map(([c1,c2,c3,effect,mana,cooldown])=>({id:effect,c1,c2,c3,effect,mana,cooldown}));
+const activeCombos = () => (G&&G.combos) ? G.combos : (COMBOS.length ? COMBOS : DEFAULT_COMBOS);
+function findCombo(ids){ const k=[...ids].sort().join("|"); return activeCombos().find(c=>[c.c1,c.c2,c.c3].sort().join("|")===k); }
+function effectTargets(g,eff,side){
+  const out=new Set(); const E=EFFECTS[eff]; if(!E) return out; const mine=g.pieces.filter(p=>p.owner===side&&!p.dead);
+  const near=(r,c)=>mine.some(p=>cheb(p.r,p.c,r,c)===1);
+  if(E.target==="ownPiece") for(const p of mine){ if(p.type==="nucleo"&&!E.core) continue; out.add(p.r+","+p.c); }
+  if(E.target==="ownTomb") for(const p of g.pieces) if(p.owner===side&&p.dead) out.add(p.r+","+p.c);
+  if(E.target==="emptyNearOwn") for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(!at(g,r,c)&&!structAt(g,r,c)&&!trapAt(g,r,c)&&near(r,c)) out.add(r+","+c);
+  if(E.target==="enemyNearOwn") for(const p of g.pieces) if(p.owner!==side&&!p.dead&&p.type!=="nucleo"&&!p.sealHp&&near(p.r,p.c)) out.add(p.r+","+p.c);
+  return out;
+}
+function canUseScroll(g,s){
+  const now=gnow(); if(!isMyTurn()) return "Espere a sua vez para usar o pergaminho.";
+  if((g.cds[mySide][s.effect]||0)>now) return `${EFFECTS[s.effect].name} recarrega em ${Math.ceil((g.cds[mySide][s.effect]-now)/1000)}s.`;
+  if(g.mana[mySide]<s.mana) return `Mana insuficiente: precisa de ${s.mana}.`;
+  return null;
+}
+function useScroll(i,r,c,side=mySide){
+  const mySide=side; selScroll=null;
+  return commit((g,now)=>{ const s=g.scrolls[mySide][i]; if(s.state!=="ready") return false; const E=EFFECTS[s.effect]; if(!E) return false;
+    if((g.cds[mySide][s.effect]||0)>now || g.mana[mySide]<s.mana) return false;
+    if(E.target!=="none" && !effectTargets(g,s.effect,mySide).has(r+","+c)) return false;
+    const R=g.rules, me_=g.players[mySide].name; const p=E.target==="none"?null:at(g,r,c);
+    if(s.effect==="curar"){ const before=p.hp; p.hp=Math.min(p.maxHp,p.hp+R.curaValor); addLog(g,`${me_} curou ${PIECES[p.type]} em ${sq(r,c)} (+${p.hp-before}).`); }
+    else if(s.effect==="ressuscitar"){ p.dead=false; p.hp=p.maxHp; p.cdUntil=0; addLog(g,`${me_} ressuscitou ${PIECES[p.type]} em ${sq(r,c)}.`); }
+    else if(s.effect==="armadilha"){ g.traps.push({id:uidStr(),owner:mySide,r,c,until:now+R.armadilhaDuracao*1000}); addLog(g,`${me_} armou uma armadilha escondida.`); }
+    else if(s.effect==="estrutura"){ g.structures.push({id:uidStr(),owner:mySide,r,c,hp:R.estruturaVida,maxHp:R.estruturaVida}); addLog(g,`${me_} ergueu uma estrutura em ${sq(r,c)}.`); }
+    else if(s.effect==="selamento"){ p.sealHp=R.seloVida; addLog(g,`${me_} selou ${PIECES[p.type]} em ${sq(r,c)}.`); }
+    else if(s.effect==="recMana"){ g.timed.push({kind:"mana",owner:mySide,start:now,every:1000,total:R.recManaSeg,amt:R.recManaQtd,done:0}); addLog(g,`${me_} ativou Recuperação de mana.`); }
+    else if(s.effect==="recVida"){ g.timed.push({kind:"vida",owner:mySide,start:now,every:60000,total:R.recVidaMin,amt:R.recVidaQtd,done:0}); addLog(g,`${me_} ativou Recuperação de vida no núcleo.`); }
+    else if(E.element){ p.element=E.element; addLog(g,`${PIECES[p.type]} em ${sq(r,c)} recebeu o elemento ${ELEMENTS[E.element].name}.`); }
+    g.mana[mySide]-=s.mana; g.cds[mySide][s.effect]=now+(s.cd||0)*1000; g.scrolls[mySide][i]={state:"empty"}; if(p) lastFlash=r+","+c;
+  });
+}
+
+/* ================= AI opponent ================= */
+function startAiGame(level){
+  const host = me, bot = {key:"__ia", name: level==="facil"?"Aprendiz (IA)":"Arquimago (IA)", xp: me.xp||0};
+  const g = newGame("ia-"+gnow(), {title:"Duelo contra a IA", turnSec:90}, host, bot);
+  g.ai=true; g.aiLevel=level; g.players.p2.ai=true; aiGame=g; openLocal(g);
+}
+function openLocal(g){
+  gameUnsub?.(); gameUnsub=null; G=clone(g); gameId=g.roomId; mySide="p1";
+  sel=inspect=selScroll=null; pending=[]; spinning={};
+  showScreen("game"); $("#endOverlay").hidden=true; renderGame();
+  if(G.status==="finished") onFinished(); else maybeAi();
+}
+function maybeAi(){ if(G&&G.ai&&G.status==="playing"&&G.turn==="p2"&&!aiRunning) aiTurn(); }
+const wait = ms => new Promise(r=>setTimeout(r,ms));
+async function aiTurn(){
+  aiRunning=true; const tn=G.turnNo, gid=gameId, easy=G.aiLevel==="facil";
+  const alive = () => G && G.ai && gameId===gid && G.status==="playing" && G.turn==="p2" && G.turnNo===tn && !$("#scr-game").hidden;
+  try{
+    await wait(900); if(!alive()) return;
+    await aiScrolls(easy); if(!alive()) return;
+    for(const k of ["andar","atacar","forca"]){
+      spinning[k]=true; renderDice(); await wait(550); spinning[k]=false; if(!alive()) return;
+      await commit(g=>{ if(g.turnNo!==tn||g.dice[k].v!=null) return false; g.dice[k].v=rnd6(); addLog(g,`${g.players.p2.name} tirou ${g.dice[k].v} no dado ${{andar:"Andar",atacar:"Atacar",forca:"Força"}[k]}.`); });
+      await wait(250);
+    }
+    let a=aiBestAttack(V(),easy); if(a && alive()){ await doAttack(a.pid,a.t); await wait(800); }
+    if(!alive()) return;
+    const m=aiBestMove(V(),easy); if(m){ await doMove(m.pid,m.r,m.c); await wait(800); }
+    if(!alive()) return;
+    if(!G.dice.atacar.used){ a=aiBestAttack(V(),easy); if(a){ await doAttack(a.pid,a.t); await wait(800); } }
+    if(!alive()) return;
+    await commit((g,now)=>{ if(g.turnNo!==tn||g.status!=="playing") return false; endTurn(g,now,"passou"); });
+  } finally { aiRunning=false; }
+}
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function aiBestAttack(g,easy){
+  const now=gnow(), opts=[];
+  for(const p of g.pieces){ if(p.owner!=="p2"||p.dead) continue;
+    for(const [k,t] of attackTargets(g,p,now)){
+      const tg = t.kind==="struct" ? g.structures.find(s=>s.id===t.id) : g.pieces.find(x=>x.id===t.id);
+      const {d}=damageOf(g,p,t.kind==="piece"?tg:null); let sc=d;
+      if(t.kind==="piece"){ if(tg.type==="nucleo") sc+=6; if(tg.hp<=d) sc+=10; sc+=g.rules.pecas[tg.type].forca*.4; }
+      else if(t.kind==="seal") sc+=4; else sc*=.5;
+      opts.push({pid:p.id,t,sc}); } }
+  if(!opts.length) return null; if(easy) return pick(opts);
+  return opts.sort((a,b)=>b.sc-a.sc)[0];
+}
+function aiPosScore(g,p,r,c){
+  const st=g.rules.pecas[p.type], core=g.pieces.find(x=>x.owner==="p1"&&x.type==="nucleo");
+  const want=Math.max(1,Math.min(st.atq,3)); let sc=-Math.abs(cheb(r,c,core.r,core.c)-want)*1.2;
+  const enemies=g.pieces.filter(x=>x.owner==="p1"&&!x.dead);
+  let near=99, danger=0; for(const e of enemies){ const d=cheb(r,c,e.r,e.c); if(e.type!=="nucleo") near=Math.min(near,d);
+    const es=g.rules.pecas[e.type]; if(e.type!=="nucleo"&&d<=Math.min(6,es.atq)) danger+=es.forca*.15; }
+  if(enemies.some(e=>cheb(r,c,e.r,e.c)<=st.atq)) sc+=3;
+  sc-=near*.25; sc-=danger*(p.hp<p.maxHp*.5?1.5:.6);
+  return sc;
+}
+function aiBestMove(g,easy){
+  const opts=[];
+  for(const p of g.pieces){ if(p.owner!=="p2"||p.dead||p.type==="nucleo") continue;
+    const base=aiPosScore(g,p,p.r,p.c);
+    for(const k of moveTargets(g,p).keys()){ const [r,c]=k.split(",").map(Number); opts.push({pid:p.id,r,c,sc:aiPosScore(g,p,r,c)-base}); } }
+  if(!opts.length) return null; if(easy) return pick(opts);
+  opts.sort((a,b)=>b.sc-a.sc); return opts[0].sc>-0.5?opts[0]:null;
+}
+async function aiScrolls(easy){
+  const side="p2"; let g=V(); const now=gnow();
+  let mine, core, enemies, threat;
+  const refresh = () => { g=V(); mine=g.pieces.filter(p=>p.owner===side&&!p.dead); core=mine.find(p=>p.type==="nucleo");
+    enemies=g.pieces.filter(p=>p.owner!==side&&!p.dead); threat=enemies.some(e=>e.type!=="nucleo"&&cheb(e.r,e.c,core.r,core.c)<=3); };
+  refresh();
+  const wantTarget = eff => {
+    const tg=[...effectTargets(g,eff,side)].map(k=>k.split(",").map(Number)); if(!tg.length) return null;
+    if(eff==="curar"){ const hurt=mine.filter(p=>p.hp<p.maxHp*.6).sort((a,b)=>a.hp/a.maxHp-b.hp/b.maxHp)[0]; return hurt?[hurt.r,hurt.c]:null; }
+    if(eff==="ressuscitar"){ const t=g.pieces.filter(p=>p.owner===side&&p.dead).sort((a,b)=>g.rules.pecas[b.type].forca-g.rules.pecas[a.type].forca)[0]; return t?[t.r,t.c]:null; }
+    if(eff==="estrutura"){ if(!threat) return null; const cs=tg.filter(([r,c])=>cheb(r,c,core.r,core.c)===1); if(!cs.length) return null;
+      return cs.sort((a,b)=>Math.min(...enemies.map(e=>cheb(a[0],a[1],e.r,e.c)))-Math.min(...enemies.map(e=>cheb(b[0],b[1],e.r,e.c))))[0]; }
+    if(eff==="armadilha") return tg.sort((a,b)=>Math.min(...enemies.map(e=>cheb(a[0],a[1],e.r,e.c)))-Math.min(...enemies.map(e=>cheb(b[0],b[1],e.r,e.c))))[0];
+    if(eff==="selamento"){ const t=enemies.filter(e=>tg.some(([r,c])=>r===e.r&&c===e.c)).sort((a,b)=>g.rules.pecas[b.type].forca-g.rules.pecas[a.type].forca)[0]; return t?[t.r,t.c]:null; }
+    if(eff==="recMana") return g.mana[side]<g.manaMax[side]*.6?[-1,-1]:null;
+    if(eff==="recVida") return core.hp<core.maxHp*.85?[-1,-1]:null;
+    if(EFFECTS[eff]?.element){ const t=mine.filter(p=>p.type!=="nucleo"&&!p.element).sort((a,b)=>g.rules.pecas[b.type].forca-g.rules.pecas[a.type].forca)[0]; return t?[t.r,t.c]:null; }
+    return null;
+  };
+  // use ready scrolls
+  for(let i=0;i<3;i++){ refresh(); const s=g.scrolls[side][i]; if(s.state!=="ready") continue;
+    if((g.cds[side][s.effect]||0)>now||g.mana[side]<s.mana) continue;
+    const t=wantTarget(s.effect); if(!t) continue;
+    await useScroll(i,t[0],t[1],side); await wait(700); }
+  // fuse one scroll
+  refresh(); const cost=g.rules.custoCristal; const free=g.scrolls[side].findIndex(s=>s.state!=="ready");
+  if(free<0 || g.mana[side] < 3*cost+20 || Math.random()<(easy?.6:.25)) return;
+  const pri=[]; if(g.pieces.some(p=>p.owner===side&&p.dead)) pri.push("ressuscitar");
+  if(mine.some(p=>p.hp<p.maxHp*.6)) pri.push("curar"); if(threat) pri.push("estrutura","selamento");
+  if(mine.some(p=>p.type!=="nucleo"&&!p.element)) pri.push(pick(Object.keys(ELEMENTS)));
+  pri.push("armadilha"); if(g.mana[side]<g.manaMax[side]*.5) pri.push("recMana");
+  const eff = easy ? pick(pri) : pri[0]; const cb=activeCombos().find(c=>c.effect===eff); if(!cb) return;
+  const ids=[cb.c1,cb.c2,cb.c3];
+  await commit(g2=>{ const sc=g2.scrolls[side][free]; if(sc.state==="ready"||g2.mana[side]<3*cost) return false; g2.mana[side]-=3*cost;
+    g2.scrolls[side][free]={state:"ready",c:ids,comboId:cb.id,effect:cb.effect,mana:cb.mana,cd:cb.cooldown};
+    addLog(g2,`${g2.players[side].name} fundiu 3 cristais num pergaminho.`); });
+  await wait(600);
+}
+
+/* ================= game: interaction ================= */
+document.getElementById("board").addEventListener("click", e => {
+  const cell=e.target.closest(".cell"); if(!cell||!G) return; const r=+cell.dataset.r, c=+cell.dataset.c, k=r+","+c; const g=V(), now=gnow();
+  if(selScroll!=null && mySide){ const s=g.scrolls[mySide][selScroll];
+    if(s.state==="ready" && EFFECTS[s.effect]?.target!=="none"){ const why=canUseScroll(g,s); const tg=effectTargets(g,s.effect,mySide);
+      if(tg.has(k)){ if(why) return toast(why); useScroll(selScroll,r,c); return; } } }
+  if(sel && isMyTurn()){ const p=g.pieces.find(x=>x.id===sel);
+    if(p){ const mv=moveTargets(g,p); if(mv.has(k)) return doMove(sel,r,c); const at_=attackTargets(g,p,now).get(k); if(at_) return doAttack(sel,at_); } }
+  const p=at(g,r,c), s=structAt(g,r,c);
+  inspect = p ? {kind:"piece",id:p.id} : s ? {kind:"struct",id:s.id} : null;
+  sel = p && !p.dead && p.owner===mySide ? p.id : null;
+  renderBoard(); renderExplain();
+});
+document.getElementById("dice").addEventListener("click", e => {
+  const b=e.target.closest("[data-die]"); if(!b||!G) return; const k=b.dataset.die;
+  if(!isMyTurn()) return toast("Os dados só giram na sua vez.");
+  if(G.dice[k].v!=null) return toast(G.dice[k].used?"Esse dado já foi usado neste turno.":"Esse dado já foi rolado. Use o resultado no tabuleiro.");
+  if(!spinning[k]){ spinning[k]=true; renderDice(); return; }
+  spinning[k]=false; const v=rnd6(), tn=G.turnNo;
+  commit(g=>{ if(g.turnNo!==tn||g.dice[k].v!=null) return false; g.dice[k].v=v; addLog(g,`${g.players[mySide].name} tirou ${v} no dado ${{andar:"Andar",atacar:"Atacar",forca:"Força"}[k]}.`); });
+});
+document.getElementById("scrolls").addEventListener("click", e => {
+  const b=e.target.closest("[data-scroll]"); if(!b||!G||!mySide) return; const i=+b.dataset.scroll;
+  if(selScroll===i){ selScroll=null; pending=[]; } else { selScroll=i; pending=[]; sel=null; }
+  renderScrolls(); renderBoard(); renderExplain(); renderCrystals();
+});
+document.getElementById("crystals").addEventListener("click", e => {
+  const b=e.target.closest("[data-cr]"); if(!b||!G) return;
+  if(!isMyTurn()) return toast("Só dá para fundir cristais na sua vez.");
+  if(selScroll==null) return toast("Primeiro clique em um pergaminho vazio.");
+  const s=G.scrolls[mySide][selScroll]; if(s.state==="ready") return toast("Esse pergaminho já tem um efeito. Use-o ou escolha outro.");
+  const cost=G.rules.custoCristal, mana=V().mana[mySide];
+  if(mana < (pending.length+1)*cost) return toast("Mana insuficiente para mais um cristal.");
+  pending.push(b.dataset.cr); renderScrolls(); renderExplain();
+  if(pending.length===3){ const ids=[...pending], i=selScroll; pending=[];
+    commit(g=>{ const sc=g.scrolls[mySide][i]; if(sc.state==="ready") return false; g.mana[mySide]-=3*cost; const cb=findCombo(ids);
+      g.scrolls[mySide][i] = cb ? {state:"ready",c:ids,comboId:cb.id,effect:cb.effect,mana:cb.mana,cd:cb.cooldown} : {state:"fail",c:ids};
+      addLog(g, cb?`${g.players[mySide].name} fundiu 3 cristais num pergaminho.`:`${g.players[mySide].name} fundiu 3 cristais, mas a combinação não existe.`); });
+  }
+});
+
+/* ================= game: render ================= */
+function renderGame(){ if(!G) return; renderNetBanner(); $("#gTitle").textContent=G.title||"Duelo"; renderBoard(); renderCrystals(); renderCards(); renderDice(); renderScrolls(); renderExplain(); renderLog(); renderClock(); }
+function toView(dr,dc){ return mySide==="p2" ? [dr,7-dc] : [7-dr,dc]; }
+function renderBoard(){
+  if(!G) return; const g=V(), now=gnow(); const B=$("#board");
+  let mv=new Map(), atk=new Map(), tgt=new Set();
+  if(sel && isMyTurn()){ const p=g.pieces.find(x=>x.id===sel); if(p&&!p.dead){ mv=moveTargets(g,p); atk=attackTargets(g,p,now); } }
+  if(selScroll!=null && mySide){ const s=g.scrolls[mySide][selScroll]; if(s?.state==="ready") tgt=effectTargets(g,s.effect,mySide); }
+  let html="";
+  for(let dr=0;dr<8;dr++) for(let dc=0;dc<8;dc++){
+    const [r,c]=toView(dr,dc), k=r+","+c, p=at(g,r,c), s=structAt(g,r,c), t=trapAt(g,r,c);
+    const cls=["cell",(r+c)%2===0?"dk":""]; if(p&&p.id===sel) cls.push("sel"); if(mv.has(k)) cls.push("mv"); if(atk.has(k)) cls.push("atk"); if(tgt.has(k)) cls.push("tgt"); if(lastFlash===k) cls.push("flash");
+    let inner="", label=sq(r,c);
+    if(t && t.owner===mySide) inner+=`<div class="trap" style="color:${t.owner==="p1"?"#195a86":"#b02536"}">${icon("armadilha")}</div>`;
+    if(p){ const st=G.rules.pecas[p.type], pct=p.hp/p.maxHp;
+      inner+=`<div class="pc ${p.owner} ${p.dead?"dead":""}">${icon(p.dead?"lapide":p.type)}
+        ${!p.dead?`<div class="hp"><i class="${pct<.34?"low":pct<.67?"mid":""}" style="width:${Math.max(0,pct*100)}%"></i></div>`:""}
+        ${p.element&&!p.dead?`<span class="el" style="background:${ELEMENTS[p.element].hex}" title="${ELEMENTS[p.element].name}"></span>`:""}
+        ${p.sealHp>0?`<div class="seal"><span>selo ${p.sealHp}</span></div>`:""}
+        ${!p.dead&&p.cdUntil>now?`<span class="cd">${Math.ceil((p.cdUntil-now)/1000)}s</span>`:""}</div>`;
+      label+=` ${p.dead?"Lápide de "+PIECES[p.type]:PIECES[p.type]} ${p.owner===mySide?"sua":"inimiga"}${p.dead?"":`, vida ${p.hp}`}`; }
+    if(s){ const pct=s.hp/s.maxHp; inner+=`<div class="pc ${s.owner}">${icon("estrutura")}<div class="hp"><i class="${pct<.34?"low":pct<.67?"mid":""}" style="width:${pct*100}%"></i></div></div>`; label+=` Estrutura, vida ${s.hp}`; }
+    html+=`<button class="${cls.join(" ")}" data-r="${r}" data-c="${c}" aria-label="${esc(label)}">${inner}</button>`;
+  }
+  B.innerHTML=html; lastFlash=null;
+  $("#ranks").innerHTML=[...Array(8)].map((_,dr)=>`<div>${toView(dr,0)[0]+1}</div>`).join("");
+  $("#files").innerHTML=[...Array(8)].map((_,dc)=>`<div>${FILES[toView(0,dc)[1]]}</div>`).join("");
+}
+function renderCrystals(){
+  const can = isMyTurn() && selScroll!=null && G.scrolls[mySide]?.[selScroll]?.state!=="ready";
+  $("#crystals").innerHTML = CRYSTALS.map(c=>`<button class="crystal" data-cr="${c.id}" title="${c.name}" aria-label="Cristal ${c.name}" ${can?"":"disabled"}>${gem(c.id)}</button>`).join("");
+}
+function renderCards(){
+  if(!G) return; const g=V(); const order = mySide==="p2"?["p1","p2"]:["p2","p1"];
+  $("#pcards").innerHTML = order.map(side=>{ const pl=g.players[side], core=g.pieces.find(p=>p.owner===side&&p.type==="nucleo");
+    const mine=side===mySide; const fr=!mine&&isFriendName(pl.name);
+    return `<div class="pcard ${g.turn===side&&g.status==="playing"?"turn":""}">
+      <span class="side" style="background:var(--${side})"></span>
+      <div style="min-width:0"><div class="nm">${esc(pl.name)}${mine?` <span class="chip">você</span>`:""}${!mine&&mySide&&!pl.ai&&g.net&&!fr?` <button class="btn sm ghost" data-addfriend="1">${NET.sentFriend?"Convite enviado":"+ Adicionar amigo"}</button>`:""}${fr?` <span class="chip">amigo</span>`:""}</div>
+      <div class="meters">
+        <div class="meter"><span class="label">Mana</span><div class="bar"><i class="mana" style="width:${g.mana[side]/g.manaMax[side]*100}%"></i></div><span>${g.mana[side]}/${g.manaMax[side]}</span></div>
+        <div class="meter"><span class="label">Núcleo</span><div class="bar"><i class="life" style="width:${Math.max(0,core.hp)/core.maxHp*100}%"></i></div><span>${Math.max(0,core.hp)}/${core.maxHp}</span></div>
+      </div></div>
+      <span class="label">${g.turn===side&&g.status==="playing"?"jogando":""}</span></div>`; }).join("");
+}
+document.getElementById("pcards").addEventListener("click", async e=>{ const b=e.target.closest("[data-addfriend]"); if(b && !NET.sentFriend) sendFriendReq(); });
+function pips(v){ const on={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]}[v]||[]; return [...Array(9)].map((_,i)=>`<i class="${on.includes(i)?"on":""}"></i>`).join(""); }
+function renderDice(){
+  if(!G) return; const names={andar:"Andar",atacar:"Atacar",forca:"Força"};
+  $("#dice").innerHTML = ["andar","atacar","forca"].map(k=>{ const d=G.dice[k]; const spin=spinning[k]&&d.v==null;
+    const cls=["die",spin?"spin":"",d.used?"used":"",d.v!=null&&!d.used?"ready":""].join(" ");
+    const hint = d.used?"usado": d.v!=null?"resultado "+d.v : spin?"clique para parar": isMyTurn()?"clique para girar":"";
+    return `<button class="${cls}" data-die="${k}" aria-label="Dado ${names[k]}"><span class="label">${names[k]}</span><span class="face ${d.v==null?"q":""}">${d.v==null?(spin?"":"?"):pips(d.v)}</span><span class="hint">${hint}</span></button>`; }).join("");
+}
+function renderScrolls(){
+  if(!G) return; const list = mySide ? G.scrolls[mySide] : [{state:"empty"},{state:"empty"},{state:"empty"}];
+  $("#scrolls").innerHTML = list.map((s,i)=>{ let inner;
+    if(selScroll===i && s.state!=="ready" && pending.length) inner=`${gemsInline(pending)}<span>${3-pending.length} cristal(is) a escolher</span>`;
+    else if(s.state==="ready") inner=`${gemsInline(s.c)}<span>${esc(EFFECTS[s.effect]?.name||s.effect)}</span>`;
+    else if(s.state==="fail") inner=`${gemsInline(s.c)}<span>Resultado zero</span>`;
+    else inner=`<span>${selScroll===i?"Escolha 3 cristais":"Pergaminho vazio"}</span>`;
+    return `<button class="scroll ${s.state}" data-scroll="${i}" aria-pressed="${selScroll===i}"><svg class="bg" viewBox="0 0 170 100"><use href="#scrollbg"/></svg><div class="in">${inner}</div></button>`; }).join("");
+}
+function kv(label,val){ return `<div><span class="label">${label}</span><br><b class="num">${val}</b></div>`; }
+function renderExplain(){
+  if(!G) return; const g=V(), now=gnow(), X=$("#explain");
+  if(selScroll!=null && mySide){ const s=g.scrolls[mySide][selScroll];
+    if(s.state==="ready"){ const E=EFFECTS[s.effect]; const why=canUseScroll(g,s);
+      X.innerHTML=`<span class="label">Explicação</span><h3>${esc(E?.name||s.effect)}</h3><p style="margin:0">${E?E.txt(g.rules):"Efeito desconhecido."}</p>
+      <div class="kv">${kv("Consumo de mana",s.mana)}${kv("Intervalo",fmtS(s.cd||0))}</div>
+      ${why?`<p style="margin:0"><b>${esc(why)}</b></p>`: E?.target==="none" ? `<div><button class="btn" id="exUse">Ativar efeito</button></div>` : `<p style="margin:0"><b>Clique numa casa destacada em amarelo no tabuleiro.</b></p>`}`;
+      const u=$("#exUse"); if(u) u.onclick=()=>useScroll(selScroll); return; }
+    X.innerHTML=`<span class="label">Explicação</span><h3>Fundir cristais</h3><p style="margin:0">Clique em 3 cristais coloridos para fundi-los neste pergaminho. Cada cristal consome ${g.rules.custoCristal} de mana. Se a combinação não existir, o resultado é zero e a mana é perdida.</p>
+      ${s.state==="fail"?`<p style="margin:0"><b>A última fusão deste pergaminho não formou nenhum efeito.</b></p>`:""}${!isMyTurn()?`<p style="margin:0"><b>Aguarde a sua vez para fundir.</b></p>`:""}`; return; }
+  if(inspect){
+    if(inspect.kind==="piece"){ const p=g.pieces.find(x=>x.id===inspect.id); if(p){ const st=g.rules.pecas[p.type]; const mine=p.owner===mySide;
+      let tip=""; if(mine&&isMyTurn()&&!p.dead){ const A=g.dice.atacar,F=g.dice.forca,M=g.dice.andar;
+        if(p.sealHp>0) tip="Selada: não anda. Ataque esta própria peça para quebrar o selo.";
+        else if(M.v&&!M.used) tip=`Andar ${Math.min(M.v,st.andar)} casa(s): clique num ponto verde.`;
+        if(A.v&&!A.used&&F.v&&!F.used){ tip+= p.cdUntil>now?` Ataque recarregando (${Math.ceil((p.cdUntil-now)/1000)}s).`:st.forca>0?` Ataque até ${Math.min(A.v,st.atq)} casa(s), ${Math.min(F.v,st.forca)} de força: clique num alvo vermelho.`:""; }
+        else if(A.v&&!A.used&&!F.v) tip+=" Role o dado Força para poder atacar.";
+        else if(F.v&&!F.used&&!A.v) tip+=" Role o dado Atacar para poder atacar."; }
+      X.innerHTML=`<span class="label">Explicação · ${mine?"sua peça":"peça inimiga"} em ${sq(p.r,p.c)}</span><h3>${p.dead?"Lápide · ":""}${PIECES[p.type]}</h3>
+        <div class="kv">${kv("Vida",p.dead?0:p.hp+"/"+p.maxHp)}${kv("Força",st.forca)}${kv("Distância ataque",st.atq)}${kv("Distância andar",st.andar)}${kv("Intervalo",st.intervalo+"s")}${kv("Elemento",p.element?ELEMENTS[p.element].name:"—")}</div>
+        ${p.type==="catapulta"?`<p style="margin:0;font-size:14px">A Catapulta atira por cima de estruturas.</p>`:""}${tip?`<p style="margin:0"><b>${tip}</b></p>`:""}`; return; } }
+    else { const s=g.structures.find(x=>x.id===inspect.id); if(s){ X.innerHTML=`<span class="label">Explicação · ${sq(s.r,s.c)}</span><h3>Estrutura</h3><div class="kv">${kv("Vida",s.hp+"/"+s.maxHp)}${kv("Dono",esc(g.players[s.owner].name))}</div><p style="margin:0">Bloqueia a passagem e os ataques. Para atingir o que está atrás, dê a volta ou destrua-a.</p>`; return; } }
+  }
+  const my=isMyTurn();
+  X.innerHTML=`<span class="label">Explicação</span><h3>${g.status!=="playing"?"Duelo encerrado":my?"Sua vez":"Vez do oponente"}</h3>
+    <p style="margin:0">${my?"Clique num dado para girá-lo e clique de novo para pará-lo. Depois escolha uma peça sua: os pontos verdes mostram para onde ela anda e os quadros vermelhos o que ela pode atacar (precisa dos dados Atacar e Força). Cada dado vale uma vez por turno.":"Enquanto espera, clique nas peças para ver os status delas."}</p>
+    <p style="margin:0;font-size:14px">Pergaminhos: clique num pergaminho e depois em 3 cristais para criar um efeito.</p>`;
+}
+function renderLog(){ const L=$("#log"); L.innerHTML=G.log.slice(-12).reverse().map(l=>`<div><b class="num">${new Date(l.t).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b> ${esc(l.x)}</div>`).join(""); }
+function renderClock(){
+  if(!G) return; const pill=$("#gTurn"); const left=Math.max(0,Math.ceil((G.turnEndsAt-gnow())/1000));
+  if(G.status!=="playing"){ pill.className="turnpill"; $("#gTurnTxt").textContent="Encerrado"; $("#gTimer").textContent=""; }
+  else { const mine=G.turn===mySide; pill.className="turnpill"+(mine?" mine":"")+(left<=10?" low":""); $("#gTurnTxt").textContent=mine?"Sua vez":`Vez de ${G.players[G.turn].name}`; $("#gTimer").textContent=fmtS(left); }
+  $("#gPass").disabled=!isMyTurn(); $("#gQuit").disabled=G.status!=="playing"||!mySide;
+}
+
+
+
+/* ================= admin (local) ================= */
+function renderAdmin(){
+  const P=$("#panel"); if(!me.isAdmin){ P.innerHTML=`<div class="card empty">Esta página é só do administrador.</div>`; return; }
+  const tabs=`<div class="tabs" role="tablist">${[["combos","Combinações"],["rules","Regras e peças"],["accounts","Contas"]].map(([k,l])=>`<button role="tab" aria-selected="${adminTab===k}" data-act="atab" data-k="${k}">${l}</button>`).join("")}</div>`;
+  if(adminTab==="combos"){
+    const d=comboDraft; const slot=i=>`<div class="field"><span class="label">Cor cristal ${i+1}: ${d.c[i]?CR[d.c[i]].name:"—"}</span><div class="swatches">${CRYSTALS.map(c=>`<button type="button" class="sw" data-act="pick" data-slot="${i}" data-c="${c.id}" aria-pressed="${d.c[i]===c.id}" title="${c.name}">${gem(c.id)}</button>`).join("")}</div></div>`;
+    P.innerHTML=`<div class="card"><div class="panel-head"><h2>Administração</h2></div>${tabs}
+      <p class="muted" style="margin-top:0;font-size:13px;max-width:65ch">As combinações e regras deste aparelho valem nos duelos em que ele cria a sala. Quem entra na sala joga com as combinações de quem criou.</p>
+      <div class="grid2" style="align-items:start">
+        <form id="comboF" style="display:grid;gap:12px">
+          <h3 style="font-size:18px">${editingCombo?"Editar combinação":"Nova combinação"}</h3>
+          ${slot(0)}${slot(1)}${slot(2)}
+          <div class="field"><label class="label" for="cbEff">Efeito</label><select id="cbEff">${Object.entries(EFFECTS).map(([k,e])=>`<option value="${k}" ${d.effect===k?"selected":""}>${e.name}</option>`).join("")}</select></div>
+          <p class="muted" style="margin:0;font-size:13px" id="cbTxt">${EFFECTS[d.effect].txt(RULES)}</p>
+          <div class="form-inline"><div class="field"><label class="label" for="cbMana">Consumo de mana</label><input id="cbMana" type="number" min="0" value="${d.mana}"></div><div class="field"><label class="label" for="cbCd">Intervalo para usar novamente (s)</label><input id="cbCd" type="number" min="0" value="${d.cd}"></div></div>
+          <div class="err" id="cbErr"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">${editingCombo?"Salvar alterações":"Criar combinação"}</button>${editingCombo?`<button class="btn ghost" type="button" data-act="cancelEdit">Cancelar</button>`:""}</div>
+          <p class="muted" style="margin:0;font-size:13px">A ordem dos cristais não importa.</p>
+        </form>
+        <div style="min-width:0"><h3 style="font-size:18px;margin-bottom:10px">Combinações cadastradas (${COMBOS.length})</h3>
+          <div class="list">${COMBOS.slice().sort((a,b)=>(EFFECTS[a.effect]?.name||"").localeCompare(EFFECTS[b.effect]?.name||"")).map(c=>`<div class="row">${gemsInline([c.c1,c.c2,c.c3])}<div class="grow"><b>${esc(EFFECTS[c.effect]?.name||c.effect)}</b><div class="muted num" style="font-size:13px">${c.mana} de mana · intervalo ${fmtS(c.cooldown)}</div></div><button class="btn sm" data-act="editCombo" data-id="${c.id}">Editar</button><button class="btn sm danger" data-act="delCombo" data-id="${c.id}">Excluir</button></div>`).join("")||`<div class="empty">Nenhuma combinação. Sem combinações, toda fusão de cristais dá resultado zero.</div>`}</div>
+          <button class="btn sm ghost" style="margin-top:10px" data-act="resetCombos">Restaurar combinações sugeridas</button></div>
+      </div></div>`;
+    $("#cbEff").onchange=e=>{ comboDraft.effect=e.target.value; $("#cbTxt").textContent=EFFECTS[comboDraft.effect].txt(RULES); };
+    $("#cbMana").oninput=e=>comboDraft.mana=+e.target.value; $("#cbCd").oninput=e=>comboDraft.cd=+e.target.value;
+    $("#comboF").onsubmit=e=>{ e.preventDefault(); const er=$("#cbErr"); const d=comboDraft;
+      if(d.c.some(x=>!x)){ er.textContent="Escolha as três cores de cristal."; return; }
+      const k=[...d.c].sort().join("|"); const dup=COMBOS.find(c=>[c.c1,c.c2,c.c3].sort().join("|")===k);
+      if(dup && dup.id!==editingCombo){ er.textContent=`Essa combinação de cores já existe (${EFFECTS[dup.effect]?.name}).`; return; }
+      const body={id:editingCombo||uidStr(),c1:d.c[0],c2:d.c[1],c3:d.c[2],effect:d.effect,mana:Math.max(0,+d.mana||0),cooldown:Math.max(0,+d.cd||0)};
+      const i=COMBOS.findIndex(c=>c.id===body.id); if(i>=0) COMBOS[i]=body; else COMBOS.push(body);
+      STORE.combos=COMBOS; save(); editingCombo=null; comboDraft={c:[null,null,null],effect:"curar",mana:8,cd:30}; toast("Combinação salva."); renderPanel(); };
+  }
+  else if(adminTab==="rules"){
+    const R=RULES;
+    P.innerHTML=`<div class="card"><div class="panel-head"><h2>Administração</h2></div>${tabs}
+      <form id="rulesF" style="display:grid;gap:18px">
+        <div class="tablewrap"><table><thead><tr><th>Peça</th><th>Vida</th><th>Força</th><th>Distância ataque</th><th>Distância andar</th><th>Intervalo (s)</th></tr></thead><tbody>
+        ${Object.keys(PIECES).map(t=>`<tr><td>${PIECES[t]}</td>${["vida","forca","atq","andar","intervalo"].map(f=>t==="nucleo"&&f==="vida"?`<td class="muted">ver abaixo</td>`:`<td><input type="number" min="0" id="pc-${t}-${f}" value="${R.pecas[t][f]}"></td>`).join("")}</tr>`).join("")}
+        </tbody></table></div>
+        <div class="grid2">${Object.keys(RULE_LABELS).map(k=>`<div class="field"><label class="label" for="ru-${k}">${RULE_LABELS[k]}</label><input type="number" min="0" id="ru-${k}" value="${R[k]}"></div>`).join("")}</div>
+        <p class="muted" style="margin:0;font-size:13px">As regras valem para todos os duelistas igualmente, a partir do próximo duelo criado neste aparelho.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">Salvar regras</button><button class="btn ghost" type="button" data-act="resetRules">Restaurar padrão</button></div>
+      </form></div>`;
+    $("#rulesF").onsubmit=e=>{ e.preventDefault(); const out=clone(DEFAULT_RULES);
+      for(const t of Object.keys(PIECES)) for(const f of ["vida","forca","atq","andar","intervalo"]){ const el=document.getElementById(`pc-${t}-${f}`); if(el) out.pecas[t][f]=Math.max(0,+el.value||0); }
+      for(const k of Object.keys(RULE_LABELS)) out[k]=Math.max(0,+document.getElementById("ru-"+k).value||0);
+      if(out.manaBase<1) out.manaBase=1; if(out.nucleoVidaBase<1) out.nucleoVidaBase=1;
+      STORE.rules=out; RULES=mergeRules(out); save(); renderProfile(); toast("Regras salvas."); };
+  }
+  else {
+    const accs=Object.values(STORE.accounts).sort((a,b)=>a.createdAt-b.createdAt);
+    P.innerHTML=`<div class="card"><div class="panel-head"><h2>Administração</h2></div>${tabs}
+      <p class="muted" style="margin-top:0;font-size:13px">Contas criadas neste aparelho. Use “Trocar senha” quando alguém perder a senha e o código de recuperação.</p>
+      <div class="list">${accs.map(a=>`<div class="row"><div class="grow"><span class="title">${esc(a.name)}</span> ${a.isAdmin?`<span class="chip">administrador</span>`:""}<div class="muted num" style="font-size:13px">${a.wins||0} vitórias · ${a.losses||0} derrotas · criada em ${new Date(a.createdAt).toLocaleDateString("pt-BR")}</div></div>
+        <input id="tp-${esc(a.key)}" type="password" placeholder="Nova senha" style="width:130px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:.45em .6em">
+        <button class="btn sm" data-act="setPw" data-key="${esc(a.key)}">Trocar senha</button>
+        ${a.key!==me.key?`<button class="btn sm ghost" data-act="toggleAdmin" data-key="${esc(a.key)}">${a.isAdmin?"Tirar admin":"Tornar admin"}</button><button class="btn sm danger" data-act="delAcc" data-key="${esc(a.key)}">Excluir</button>`:""}</div>`).join("")}</div></div>`;
+  }
+}
+async function adminClick(a,b){
+  if(!me?.isAdmin) return;
+  if(a==="atab"){ adminTab=b.dataset.k; renderPanel(); }
+  else if(a==="pick"){ comboDraft.c[+b.dataset.slot]=b.dataset.c; renderPanel(); }
+  else if(a==="editCombo"){ const c=COMBOS.find(x=>x.id===b.dataset.id); editingCombo=c.id; comboDraft={c:[c.c1,c.c2,c.c3],effect:c.effect,mana:c.mana,cd:c.cooldown}; renderPanel(); }
+  else if(a==="cancelEdit"){ editingCombo=null; comboDraft={c:[null,null,null],effect:"curar",mana:8,cd:30}; renderPanel(); }
+  else if(a==="delCombo"){ if(b.dataset.confirm!=="1"){ b.dataset.confirm="1"; b.textContent="Confirmar exclusão"; return; } COMBOS=COMBOS.filter(c=>c.id!==b.dataset.id); STORE.combos=COMBOS; save(); toast("Combinação excluída."); renderPanel(); }
+  else if(a==="resetCombos"){ if(b.dataset.confirm!=="1"){ b.dataset.confirm="1"; b.textContent="Confirmar: trocar todas pelas sugeridas"; return; } COMBOS=clone(DEFAULT_COMBOS); STORE.combos=COMBOS; save(); renderPanel(); }
+  else if(a==="resetRules"){ STORE.rules=null; RULES=mergeRules(null); save(); renderProfile(); renderPanel(); toast("Regras restauradas."); }
+  else if(a==="setPw"){ const k=b.dataset.key, pw=document.getElementById("tp-"+k).value; if(pw.length<4) return toast("A senha precisa de 4 caracteres ou mais.");
+    const acc=STORE.accounts[k]; acc.salt=newSalt(); acc.hash=await pbkdf2(pw,acc.salt); await save(true); toast(`Senha de ${acc.name} trocada.`); renderPanel(); }
+  else if(a==="toggleAdmin"){ const acc=STORE.accounts[b.dataset.key]; acc.isAdmin=!acc.isAdmin; save(); renderPanel(); }
+  else if(a==="delAcc"){ if(b.dataset.confirm!=="1"){ b.dataset.confirm="1"; b.textContent="Confirmar exclusão"; return; } const k=b.dataset.key; delete STORE.accounts[k]; delete STORE.friends[k]; delete STORE.invites[k]; save(); renderPanel(); }
+}
+
+/* ================= boot ================= */
+(async function boot(){
+  showScreen("login");
+  await loadStore();
+  if(STORE.session && STORE.accounts[STORE.session]) enter(STORE.accounts[STORE.session]);
+  if(!NATIVE) console.info("Tabuleiro Mágico: modo navegador — a conexão é simulada entre abas.");
+})();
+
+})();
+</script>
+</body>
+</html>

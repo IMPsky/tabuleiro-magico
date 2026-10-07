@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Tabuleiro Mágico</string>
+    <string name="title_activity_main">Tabuleiro Mágico</string>
+    <string name="package_name">com.rubens.tabuleiromagico</string>
+    <string name="custom_url_scheme">com.rubens.tabuleiromagico</string>
+</resources>
