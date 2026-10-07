@@ -10,6 +10,9 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,13 +22,25 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - run: npm install
-      - run: npx cap sync android
+      - name: Preparar ajudante de erros
+        run: |
+          cat > "$RUNNER_TEMP/run.sh" <<'SH'
+          set -o pipefail
+          "$@" 2>&1 | tee "$RUNNER_TEMP/out.log"; s=${PIPESTATUS[0]}
+          if [ "$s" -ne 0 ]; then
+            msg=$(grep -E "error|Error|ERROR|wrong|FAIL|\.java:" "$RUNNER_TEMP/out.log" | tail -25; echo ----; tail -25 "$RUNNER_TEMP/out.log")
+            msg="${msg//'%'/'%25'}"; msg="${msg//$'\n'/'%0A'}"; msg="${msg//$'\r'/}"
+            echo "::error title=Falha em: $*::$msg"
+          fi
+          exit $s
+          SH
+          chmod +x "$RUNNER_TEMP/run.sh"
+      - run: $RUNNER_TEMP/run.sh npm install
+      - run: $RUNNER_TEMP/run.sh npx cap sync android
       - name: Compilar APK
         run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          cd android && chmod +x gradlew
+          $RUNNER_TEMP/run.sh ./gradlew assembleDebug --no-daemon --stacktrace
           cp app/build/outputs/apk/debug/app-debug.apk ../TabuleiroMagico.apk
       - uses: actions/upload-artifact@v4
         with:
