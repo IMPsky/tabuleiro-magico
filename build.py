@@ -1,41 +1,13 @@
 #!/usr/bin/env python3
-"""Monta www/index.html a partir do jogo base (src/base.html), do novo código (src/app.js) e do corpo (src/body.html)."""
+"""Monta www/index.html juntando os arquivos de src/."""
 import re, shutil, pathlib
 ROOT = pathlib.Path(__file__).parent
-A = (ROOT / "src/base.html").read_text()
 body = (ROOT / "src/body.html").read_text()
 app = (ROOT / "src/app.js").read_text()
-
-def between(s, a, b):
-    i = s.index(a); j = s.index(b, i)
-    return s[i:j]
-
-css = between(A, "<style>", "</style>")[len("<style>"):]
-svg = between(A, '<svg width="0" height="0"', "</svg>") + "</svg>"
-consts = between(A, "/* ================= constants", "/* ================= state")
-core = between(A, "/* ================= game: rules", "/* ================= admin")
-
-def rep(s, a, b, count=1):
-    assert s.count(a) == count, (s.count(a), a[:80])
-    return s.replace(a, b)
-
-# --- sem níveis: status iguais para todos
-consts = rep(consts, "manaBase:100, nucleoVidaBase:100, porNivel:5, xpPorNivel:200, xpVitoria:60, xpDerrota:20,", "manaBase:100, nucleoVidaBase:100,")
-consts = rep(consts, 'manaBase:"Mana inicial (nível 0)", nucleoVidaBase:"Vida do núcleo (nível 0)", porNivel:"Mana e vida extra por nível",\n  xpPorNivel:"Experiência por nível", xpVitoria:"XP por vitória", xpDerrota:"XP por derrota",\n',
-             'manaBase:"Mana de cada duelista", nucleoVidaBase:"Vida do núcleo de cada duelista",\n')
-
-# --- núcleo do jogo
-core = core.replace("Date.now()", "gnow()")
-core = rep(core, "const activeCombos = () => COMBOS.length ? COMBOS : DEFAULT_COMBOS;",
-           "const activeCombos = () => (G&&G.combos) ? G.combos : (COMBOS.length ? COMBOS : DEFAULT_COMBOS);")
-core = rep(core, 'const mine=side===mySide; const rel=!mine&&mySide?friendRel(pl.key):null;', 'const mine=side===mySide; const fr=!mine&&isFriendName(pl.name);')
-core = rep(core, '${!mine&&mySide&&!rel&&!pl.ai&&db&&!OFFLINE?` <button class="btn sm ghost" data-addfriend="${esc(pl.key)}" data-name="${esc(pl.name)}">+ Adicionar amigo</button>`:""}${rel?.status==="accepted"?` <span class="chip">amigo</span>`:""}',
-           '${!mine&&mySide&&!pl.ai&&g.net&&!fr?` <button class="btn sm ghost" data-addfriend="1">${NET.sentFriend?"Convite enviado":"+ Adicionar amigo"}</button>`:""}${fr?` <span class="chip">amigo</span>`:""}')
-core = rep(core, 'const b=e.target.closest("[data-addfriend]"); if(b){ try{ await addFriend(b.dataset.addfriend,b.dataset.name);}catch(x){toast("Não foi possível enviar o convite.");} }',
-           'const b=e.target.closest("[data-addfriend]"); if(b && !NET.sentFriend) sendFriendReq();')
-core = rep(core, "function renderGame(){ if(!G) return; $(\"#gTitle\").textContent=G.title||\"Duelo\";",
-           "function renderGame(){ if(!G) return; renderNetBanner(); $(\"#gTitle\").textContent=G.title||\"Duelo\";")
-
+css = (ROOT / "src/style.css").read_text()
+svg = (ROOT / "src/icons.svg").read_text()
+consts = (ROOT / "src/consts.js").read_text()
+core = (ROOT / "src/core.js").read_text()
 app = app.replace("/*@@GAME_CORE@@*/", core)
 
 fonts = """

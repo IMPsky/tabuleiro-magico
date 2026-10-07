@@ -39,7 +39,7 @@
         <button data-nav="play">Jogar</button>
         <button data-nav="friends">Amigos<span class="badge" id="friendBadge" hidden>0</span></button>
         <button data-nav="profile">Perfil</button>
-        <button data-nav="admin" id="navAdmin" hidden>Administração</button>
+        <button data-nav="arsenal">Arsenal</button>
       </nav>
       <button class="btn sm ghost" id="logout">Sair</button>
     </header>
@@ -54,6 +54,7 @@
     <header class="gbar">
       <button class="btn sm ghost" id="gBack" title="Voltar ao menu (o duelo continua)">← Menu</button>
       <div class="room" id="gTitle">Duelo</div>
+      <span class="chip" id="gScore" hidden></span>
       <span class="chip" id="gLink" hidden></span>
       <span class="turnpill" id="gTurn"><span id="gTurnTxt">—</span><span class="t" id="gTimer"></span></span>
       <button class="btn sm gold" id="gPass">Passar vez</button>
@@ -63,14 +64,13 @@
     <div class="game">
       <div style="min-width:0;display:grid;gap:10px">
         <div class="boardwrap">
-          <div class="ranks" id="ranks"></div>
           <div class="board" id="board" role="grid" aria-label="Tabuleiro"></div>
-          <div class="files" id="files"></div>
         </div>
         <div class="legend">
           <span><i style="background:var(--move)"></i>casa para andar</span>
           <span><i style="background:var(--atk)"></i>alvo de ataque</span>
           <span><i style="background:var(--tgt)"></i>alvo do pergaminho</span>
+          <span id="fieldTag" hidden></span>
         </div>
       </div>
       <div class="console">

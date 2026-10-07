@@ -2,11 +2,14 @@
 
 Jogo de duelo em tabuleiro 8×8 para Android. Funciona sem internet:
 
-- **Contas no aparelho.** Cada pessoa cria nome e senha, e a conta fica salva no celular. A primeira conta criada no aparelho é a administradora.
+- **Contas no aparelho.** Cada pessoa cria nome e senha, e a conta fica salva no celular. Se esquecer a senha, usa o código de recuperação mostrado no cadastro.
+- **Arsenal.** As peças são placas de pedra. Cada duelista dá nome e imagem às suas placas e distribui 40 pontos entre vida, força, distância de ataque, distância de andar e intervalo.
+- **Séries de melhor de 3.** Quem vencer 2 duelos leva a série. As combinações de cristais são sorteadas quando a sala é criada e ficam iguais até o fim da série.
+- **Recarga dos pergaminhos.** Só corre durante a vez do oponente.
+- **Campo elemental.** Pinta o tabuleiro com a cor de um elemento e dá +2 de dano às placas desse elemento, dos dois lados.
 - **Sala por IP (Wi-Fi).** Quem cria a sala vê o IP do aparelho (ex.: `192.168.0.12`). O outro jogador digita esse IP em **Jogar → Entrar pelo IP**. Os dois precisam estar no mesmo Wi-Fi ou no hotspot de um deles.
-- **Sala por Bluetooth.** Quem cria a sala escolhe **Criar sala por Bluetooth**. O outro toca em **Procurar sala por Bluetooth** e escolhe o aparelho. Se os celulares nunca foram pareados, quem criou a sala toca em **Ficar visível**.
+- **Sala por Bluetooth.** Quem cria a sala escolhe **Criar sala por Bluetooth**. O outro toca em **Procurar sala por Bluetooth** e escolhe o aparelho.
 - **Contra a IA.** Tem dois níveis, fácil e normal.
-- **Status iguais para todos.** Não existe nível nem experiência: todos começam com 100 de mana e 100 de vida no núcleo. O administrador muda esses valores em **Administração → Regras e peças**.
 
 ## Como gerar o APK
 
@@ -36,8 +39,10 @@ Outra forma de instalar: com o celular ligado no USB e a depuração USB ativada
 
 | Arquivo | O que tem |
 |---|---|
-| `src/base.html` | Visual, regras, tabuleiro, pergaminhos e a IA (o jogo base). |
-| `src/app.js` | Contas locais, menu, salas por IP/Bluetooth, amigos, administração e sincronização do duelo. |
+| `src/consts.js` | Regras fixas, placas, efeitos e sorteio das combinações. |
+| `src/core.js` | Duelo: movimento, ataque, pergaminhos, IA e desenho do tabuleiro. |
+| `src/style.css`, `src/icons.svg` | Visual e ícones. |
+| `src/app.js` | Contas locais, menu, Arsenal, salas por IP/Bluetooth, amigos e a série melhor de 3. |
 | `src/body.html` | Telas (login, menu, duelo). |
 | `build.py` | Junta tudo em `www/index.html`. |
 | `android/app/src/main/java/com/rubens/tabuleiromagico/LinkPlugin.java` | Código nativo da conexão (servidor TCP e Bluetooth RFCOMM). |
@@ -58,7 +63,5 @@ Durante o duelo, quem faz a jogada envia o estado completo da partida para o out
 
 ## Observações
 
-- **O código nativo ainda não foi compilado.** O `LinkPlugin.java` foi escrito sem acesso ao Android SDK. Se o Android Studio mostrar algum erro de compilação, envie a mensagem para correção.
-- **Esqueci a senha.** No cadastro aparece um **código de recuperação**, e ele troca a senha. Se a pessoa perder o código, o administrador do aparelho troca a senha em **Administração → Contas**. Não há recuperação por e-mail, porque o app não usa internet.
-- **Combinações de cristais.** Valem as combinações do aparelho de quem criou a sala.
+- **Esqueci a senha.** No cadastro aparece um **código de recuperação**, e ele troca a senha. Sem o código, a senha não pode ser recuperada. Não há recuperação por e-mail, porque o app não usa internet.
 - **Amigos.** Os convites de amizade são enviados durante o duelo ou na sala de espera. Cada amigo fica salvo com o último IP ou aparelho Bluetooth usado, para entrar de novo com um toque.
