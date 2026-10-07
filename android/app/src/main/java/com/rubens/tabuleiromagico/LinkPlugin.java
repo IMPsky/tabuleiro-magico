@@ -38,7 +38,12 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -47,7 +52,8 @@ import java.util.concurrent.Executors;
  * - Wi-Fi: quem cria a sala abre um ServerSocket TCP (porta 47800) e mostra o IP local;
  *   o outro jogador conecta digitando esse IP.
  * - Bluetooth: quem cria a sala abre um servidor RFCOMM; o outro escolhe o aparelho na lista.
- * As mensagens são linhas de texto (JSON) terminadas em "\n".
+ * Quem cria a sala aceita até "maxPeers" conexões (1 no duelo 1x1, 3 no 2x2).
+ * As mensagens são linhas de texto (JSON) terminadas em "\n". Cada conexão tem um id ("peer").
  * Eventos enviados ao JavaScript: connected, data, disconnected, error, btDevice, btScanDone.
  */
 @CapacitorPlugin(
@@ -70,7 +76,9 @@ public class LinkPlugin extends Plugin {
 
     private ServerSocket tcpServer;
     private BluetoothServerSocket btServer;
-    private volatile Peer peer;
+    private final Map<String, Peer> peers = new ConcurrentHashMap<>();
+    private final AtomicInteger peerSeq = new AtomicInteger();
+    private volatile int maxPeers = 1;
     private BroadcastReceiver scanReceiver;
 
     /** Uma conexão ativa (TCP ou Bluetooth). */
@@ -80,10 +88,12 @@ public class LinkPlugin extends Plugin {
         final OutputStream out;
         final String via;
         final String address;
+        final String id;
         volatile boolean closed = false;
 
         Peer(Closeable socket, InputStream in, OutputStream out, String via, String address) {
             this.socket = socket; this.in = in; this.out = out; this.via = via; this.address = address;
+            this.id = "c" + peerSeq.incrementAndGet();
         }
 
         void startReading() {
@@ -93,6 +103,7 @@ public class LinkPlugin extends Plugin {
                     while ((line = r.readLine()) != null) {
                         JSObject d = new JSObject();
                         d.put("line", line);
+                        d.put("peer", id);
                         notifyListeners("data", d);
                     }
                     drop("O outro jogador saiu.");
@@ -106,8 +117,9 @@ public class LinkPlugin extends Plugin {
             if (closed) return;
             closed = true;
             try { socket.close(); } catch (Exception ignored) {}
-            if (peer == this) peer = null;
+            peers.remove(id);
             JSObject d = new JSObject();
+            d.put("peer", id);
             d.put("reason", reason);
             d.put("via", via);
             notifyListeners("disconnected", d);
@@ -115,14 +127,14 @@ public class LinkPlugin extends Plugin {
     }
 
     private void attach(Peer p) {
-        Peer old = peer;
-        if (old != null && !old.closed) {
-            // Já existe alguém conectado: recusa o novo.
+        if (peers.size() >= maxPeers) {
+            // Sala cheia: recusa a nova conexão.
             try { p.socket.close(); } catch (Exception ignored) {}
             return;
         }
-        peer = p;
+        peers.put(p.id, p);
         JSObject d = new JSObject();
+        d.put("peer", p.id);
         d.put("via", p.via);
         d.put("address", p.address);
         notifyListeners("connected", d);
@@ -166,6 +178,7 @@ public class LinkPlugin extends Plugin {
     @PluginMethod
     public void tcpHost(PluginCall call) {
         final int port = call.getInt("port", DEFAULT_PORT);
+        maxPeers = Math.max(1, Math.min(3, call.getInt("maxPeers", 1)));
         stopServers();
         try {
             tcpServer = new ServerSocket();
@@ -195,6 +208,7 @@ public class LinkPlugin extends Plugin {
         final String ip = call.getString("ip");
         final int port = call.getInt("port", DEFAULT_PORT);
         if (ip == null || ip.trim().isEmpty()) { call.reject("Digite o IP da sala."); return; }
+        maxPeers = 1;
         io.execute(() -> {
             try {
                 Socket s = new Socket();
@@ -273,6 +287,7 @@ public class LinkPlugin extends Plugin {
         if (a == null) { call.reject("Este aparelho não tem Bluetooth."); return; }
         if (!a.isEnabled()) { call.reject("Ligue o Bluetooth para criar a sala."); return; }
         if (getPermissionState(btAlias()) != PermissionState.GRANTED) { call.reject("Permita o uso do Bluetooth para criar a sala."); return; }
+        maxPeers = Math.max(1, Math.min(3, call.getInt("maxPeers", 1)));
         stopServers();
         try {
             btServer = a.listenUsingRfcommWithServiceRecord("TabuleiroMagico", BT_UUID);
@@ -364,6 +379,7 @@ public class LinkPlugin extends Plugin {
         final String address = call.getString("address");
         BluetoothAdapter a = adapter();
         if (a == null || address == null) { call.reject("Escolha um aparelho."); return; }
+        maxPeers = 1;
         io.execute(() -> {
             try {
                 try { a.cancelDiscovery(); } catch (Exception ignored) {}
@@ -383,33 +399,39 @@ public class LinkPlugin extends Plugin {
     @PluginMethod
     public void send(PluginCall call) {
         final String data = call.getString("data");
-        final Peer p = peer;
-        if (p == null || p.closed) { call.reject("Sem conexão com o outro jogador."); return; }
+        final String to = call.getString("peer");
+        final List<Peer> targets = new ArrayList<>();
+        if (to != null) { Peer p = peers.get(to); if (p != null && !p.closed) targets.add(p); }
+        else for (Peer p : peers.values()) if (!p.closed) targets.add(p);
+        if (targets.isEmpty()) { call.reject("Sem conexão com o outro jogador."); return; }
+        final byte[] bytes = (data + "\n").getBytes(StandardCharsets.UTF_8);
         writer.execute(() -> {
-            try {
-                p.out.write((data + "\n").getBytes(StandardCharsets.UTF_8));
-                p.out.flush();
-                call.resolve();
-            } catch (Exception e) {
-                p.drop("A conexão caiu.");
-                call.reject("Não foi possível enviar a jogada.");
+            boolean ok = false;
+            for (Peer p : targets) {
+                try { p.out.write(bytes); p.out.flush(); ok = true; }
+                catch (Exception e) { p.drop("A conexão caiu."); }
             }
+            if (ok) call.resolve(); else call.reject("Não foi possível enviar a jogada.");
         });
     }
 
-    /** Fecha só a conexão com o outro jogador (a sala continua aberta). */
+    /** Fecha a conexão com um jogador (ou com todos); a sala continua aberta. */
     @PluginMethod
     public void disconnect(PluginCall call) {
-        Peer p = peer;
-        if (p != null) p.drop("Conexão encerrada.");
+        String id = call.getString("peer");
+        if (id != null) { Peer p = peers.get(id); if (p != null) p.drop("Conexão encerrada."); }
+        else dropAll("Conexão encerrada.");
         call.resolve();
+    }
+
+    private void dropAll(String reason) {
+        for (Peer p : new ArrayList<>(peers.values())) p.drop(reason);
     }
 
     /** Fecha tudo: conexão e sala. */
     @PluginMethod
     public void close(PluginCall call) {
-        Peer p = peer;
-        if (p != null) p.drop("Conexão encerrada.");
+        dropAll("Conexão encerrada.");
         stopServers();
         stopScanReceiver();
         call.resolve();
@@ -432,8 +454,7 @@ public class LinkPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
-        Peer p = peer;
-        if (p != null) p.drop("Aplicativo fechado.");
+        dropAll("Aplicativo fechado.");
         stopServers();
         stopScanReceiver();
         io.shutdownNow();

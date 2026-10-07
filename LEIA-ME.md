@@ -3,13 +3,19 @@
 Jogo de duelo em tabuleiro 8×8 para Android. Funciona sem internet:
 
 - **Contas no aparelho.** Cada pessoa cria nome e senha, e a conta fica salva no celular. Se esquecer a senha, usa o código de recuperação mostrado no cadastro.
-- **Arsenal.** As peças são placas de pedra. Cada duelista dá nome e imagem às suas placas e distribui 40 pontos entre vida, força, distância de ataque, distância de andar e intervalo.
-- **Séries de melhor de 3.** Quem vencer 2 duelos leva a série. As combinações de cristais são sorteadas quando a sala é criada e ficam iguais até o fim da série.
-- **Recarga dos pergaminhos.** Só corre durante a vez do oponente.
-- **Campo elemental.** Pinta o tabuleiro com a cor de um elemento e dá +2 de dano às placas desse elemento, dos dois lados.
-- **Sala por IP (Wi-Fi).** Quem cria a sala vê o IP do aparelho (ex.: `192.168.0.12`). O outro jogador digita esse IP em **Jogar → Entrar pelo IP**. Os dois precisam estar no mesmo Wi-Fi ou no hotspot de um deles.
-- **Sala por Bluetooth.** Quem cria a sala escolhe **Criar sala por Bluetooth**. O outro toca em **Procurar sala por Bluetooth** e escolhe o aparelho.
-- **Contra a IA.** Tem dois níveis, fácil e normal.
+- **Arsenal.** As peças são placas de pedra. Cada duelista dá nome e imagem às placas, ao núcleo e à lápide, e distribui 40 pontos entre vida, força, distância de ataque, distância de andar e intervalo.
+- **Modos 1 x 1 e 2 x 2.** No 2 x 2 jogam 4 pessoas em dois times. Quem cria a sala recebe os outros 3 celulares e repassa as jogadas para todos.
+- **Séries de melhor de 3.** As combinações de cristais são sorteadas quando a sala é criada e ficam iguais até o fim da série. A página **Combinações** mostra todas as habilidades que existem.
+- **Intervalos.** O intervalo das placas e a recarga dos pergaminhos só correm durante a vez do adversário.
+- **Núcleo.** Pode andar quantas casas o dado Andar mandar.
+- **Mana.** Cada duelista começa com 200.
+- **Pergaminho de feitiço.** Aparece no centro do tabuleiro depois de 5 minutos, depois de mais 10, de mais 15 e assim por diante. Quem pisar nele ganha um efeito pronto.
+- **Campo elemental.** Pinta o tabuleiro com a cor de um elemento e dá +2 de dano às placas desse elemento.
+- **Sons e efeitos.** Tem som de cristal, brilho quando uma combinação dá certo, número de dano nos ataques e a vida descendo. O nome de cada placa aparece sobre ela.
+- **Informação oculta.** Cada jogador vê só a própria mana e a vida do próprio núcleo.
+- **Sala por IP (Wi-Fi).** Quem cria a sala vê o IP do aparelho (ex.: `192.168.0.12`). Os outros digitam esse IP em **Jogar → Entrar pelo IP**. Todos precisam estar no mesmo Wi-Fi ou no hotspot de quem criou a sala.
+- **Sala por Bluetooth.** Os outros tocam em **Procurar sala por Bluetooth** e escolhem o aparelho de quem criou a sala.
+- **Contra a IA.** Só no 1 x 1, com dois níveis: fácil e normal.
 
 ## Como gerar o APK
 

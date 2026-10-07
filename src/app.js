@@ -1,5 +1,5 @@
 /* ================= state ================= */
-let me = null, view = "home", IMGS = {p1:[],p2:[]};
+let me = null, view = "home", IMGS = {};
 let aiGame=null, aiRunning=false, gameUnsub=null;
 let G=null, gameId=null, mySide=null, sel=null, inspect=null, selScroll=null, pending=[], spinning={}, busy=false;
 const timeoutSent = {}; let lastFlash=null, finishedHandled={};
@@ -24,6 +24,7 @@ function showScreen(id){ for(const s of ["login","lobby","game"]) $("#scr-"+s).h
 $("#armyL").innerHTML = [1,2,3,4].map(()=>icon("placa")).join("");
 $("#armyR").innerHTML = [1,2,3,4].map(()=>icon("placa")).join("");
 const myArsenal = () => (me.arsenal ||= defaultArsenal());
+const myImgs = () => ({plates:myArsenal().filter(x=>x.on).slice(0,MAX_PLATES).map(x=>x.img||null), core:me.coreImg||null, tomb:me.tombImg||null});
 function modal(html){ $("#modalCard").innerHTML=html; $("#modal").hidden=false; }
 function closeModal(){ $("#modal").hidden=true; }
 const newCode = () => { const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789", a=new Uint8Array(8); crypto.getRandomValues(a); return [...a].map(x=>A[x%A.length]).join(""); };
@@ -92,7 +93,7 @@ $("#profileCard").onclick = e => { const b=e.target.closest("[data-go]"); if(b) 
 
 function resumeBanner(){
   let h="";
-  if(G && G.net && !G.series.done && $("#scr-game").hidden) h+=`<div class="banner"><div class="grow"><b>Série em andamento</b> contra ${esc(G.players[other(mySide)].name)}.</div><button class="btn gold sm" data-act="resumeNet">Voltar ao duelo</button></div>`;
+  if(G && G.net && !G.series.done && $("#scr-game").hidden) h+=`<div class="banner"><div class="grow"><b>Série em andamento</b> contra ${esc(teamName(G,otherTeam(myTeam())))}.</div><button class="btn gold sm" data-act="resumeNet">Voltar ao duelo</button></div>`;
   if(aiGame && aiGame.status==="playing") h+=`<div class="banner"><div class="grow"><b>Série contra a IA em andamento.</b></div><button class="btn gold sm" data-act="resumeAi">Voltar ao duelo</button></div>`;
   return h;
 }
@@ -111,6 +112,7 @@ function renderPanel(){
       <div class="pieces-guide">${on.map((pl,i)=>{ const st=plateStats(pl); return `<div class="pg">${pl.img?`<img class="pg-img" alt="" src="${esc(pl.img)}">`:icon("placa")}<div class="nm">${esc(pl.name||`Placa ${i+1}`)}</div><div class="st num">Vida ${st.vida} · Força ${st.forca}<br>Ataque ${st.atq} · Andar ${st.andar}<br>Intervalo ${st.intervalo}s</div></div>`; }).join("")}</div></div>`;
   }
   else if(view==="arsenal"){ renderArsenal(P); }
+  else if(view==="combos"){ renderCombosPage(P); }
   else if(view==="play"){
     const lastIp = STORE.lastIp || "";
     P.innerHTML = resume + `<div class="card" style="display:grid;gap:18px">
@@ -119,6 +121,9 @@ function renderPanel(){
         <form class="form-inline" id="newRoom">
           <div class="field"><label class="label" for="nrTitle">Título da sala</label><input id="nrTitle" maxlength="40" placeholder="Duelo dos magos" value="${esc(STORE.lastTitle||"")}" required></div>
           <div class="field" style="max-width:160px"><label class="label" for="nrPass">Senha (opcional)</label><input id="nrPass" type="password" maxlength="20" autocomplete="off"></div>
+          <fieldset class="modepick"><legend class="label">Modo</legend>
+            <label><input type="radio" name="nrMode" value="1x1" ${(STORE.lastMode||"1x1")==="1x1"?"checked":""}> 1 x 1</label>
+            <label><input type="radio" name="nrMode" value="2x2" ${STORE.lastMode==="2x2"?"checked":""}> 2 x 2 (4 jogadores)</label></fieldset>
           <div class="field" style="max-width:150px"><label class="label" for="nrTurn">Tempo por turno</label><select id="nrTurn">${[30,60,90,120,180].map(s=>`<option value="${s}" ${s===(STORE.lastTurn||60)?"selected":""}>${fmtS(s)}</option>`).join("")}</select></div>
         </form>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="host" data-via="tcp">Criar sala no Wi-Fi (IP)</button><button class="btn" data-act="host" data-via="bt">Criar sala por Bluetooth</button></div>
@@ -166,7 +171,8 @@ document.getElementById("panel").addEventListener("click", async e => {
   else if(a==="host") hostRoom(b.dataset.via);
   else if(a==="btFind") btFind();
   else if(a==="btJoin") joinByBt(b.dataset.addr, b.dataset.name);
-  else if(a==="invOk"){ const v=myInvites().splice(i,1)[0]; addFriendLocal(v); save(); renderInvitesBadge(); renderPanel(); toast(`${v.name} agora é seu amigo.`); if(NET.connected) netSend({t:"friendOk",name:me.name}); }
+  else if(a==="invOk"){ const v=myInvites().splice(i,1)[0]; addFriendLocal(v); save(); renderInvitesBadge(); renderPanel(); toast(`${v.name} agora é seu amigo.`);
+    const r={t:"friendOk",from:me.name,to:v.name}; if(NET.role==="host"){ const p=peerByName(v.name); if(p) netSend(r,p); } else if(NET.connected) netSend(r); }
   else if(a==="invNo"){ myInvites().splice(i,1); save(); renderInvitesBadge(); renderPanel(); }
   else if(a==="fIp") joinByIp(myFriends()[i].ip);
   else if(a==="fBt") joinByBt(myFriends()[i].bt, myFriends()[i].btName);
@@ -183,6 +189,21 @@ function setAvatar(file){
   img.onerror=()=>toast("Esse arquivo não é uma imagem válida."); img.src=url;
 }
 
+/* ================= página Combinações ================= */
+function renderCombosPage(P){
+  const range=(a,b,u="")=>a===b?`${a}${u}`:`${a} a ${b}${u}`;
+  const card=k=>{ const E=EFFECTS[k], c=EFFECT_COST[k]||[5,8,[20,30,45]];
+    return `<div class="combo-card"><div class="cc-head"><h3>${esc(E.name)}</h3>${E.element?`<i class="eldot" style="background:${ELEMENTS[E.element].hex}"></i>`:""}</div>
+      <p style="margin:0">${E.txt(RULES)}</p>
+      <div class="cc-meta"><span class="chip">Alvo: ${TARGET_TXT[E.target]}</span><span class="chip">Mana: ${range(c[0],c[1])}</span><span class="chip">Intervalo: ${range(Math.min(...c[2]),Math.max(...c[2])," s")}</span></div></div>`; };
+  const base=Object.keys(EFFECTS).filter(k=>!EFFECTS[k].element), els=Object.keys(EFFECTS).filter(k=>EFFECTS[k].element);
+  P.innerHTML = resumeBanner() + `<div class="card" style="display:grid;gap:16px"><div class="panel-head" style="margin:0"><h2>Combinações</h2></div>
+    <p class="muted" style="margin:0;max-width:68ch">Estas são todas as habilidades que existem no jogo. Cada uma nasce da fusão de 3 cristais num pergaminho, mas as cores são <b>sorteadas</b> sempre que uma sala é criada e só valem até o fim daquela série. Durante o duelo, o botão “últimas” ao lado dos cristais mostra o que você já tentou.</p>
+    <h3 class="label">Efeitos</h3><div class="combo-grid">${base.map(card).join("")}</div>
+    <h3 class="label">Elementos</h3><div class="combo-grid">${els.map(card).join("")}</div>
+    <p class="muted" style="margin:0;font-size:13px">A mana e o intervalo exatos de cada habilidade também são sorteados com a sala, dentro das faixas acima. O intervalo só corre durante a vez do adversário.</p></div>`;
+}
+
 /* ================= Arsenal (placas de pedra) ================= */
 function renderArsenal(P){
   const ars=myArsenal(), used=arsenalPoints(ars), left=RULES.pontosArsenal-used;
@@ -193,9 +214,18 @@ function renderArsenal(P){
   const preview=[1,0].map(r=>[...Array(8)].map((_,c)=>cell(r,c)).join("")).join("");
   P.innerHTML = resumeBanner() + `<div class="card" style="display:grid;gap:16px">
     <div class="panel-head" style="margin:0"><h2>Arsenal</h2><span class="chip num ${left<0?"bad":""}" style="font-size:14px;padding:4px 12px"><b>${left}</b>&nbsp;de ${RULES.pontosArsenal} pontos livres</span></div>
-    <p class="muted" style="margin:0;max-width:66ch">Dê nome e imagem às suas placas de pedra e distribua os pontos entre os atributos. Só as placas marcadas como <b>em campo</b> entram no duelo e gastam pontos. Elas ocupam o tabuleiro nesta ordem:</p>
+    <p class="muted" style="margin:0;max-width:66ch">Dê nome e imagem às suas placas de pedra e distribua os pontos entre os atributos. Só as placas marcadas como <b>em campo</b> entram no duelo e gastam pontos. Elas ocupam o tabuleiro nesta ordem (no 2 x 2 entram só as 7 primeiras):</p>
     <div class="ap-grid" aria-label="Posição das placas no seu lado do tabuleiro">${preview}</div>
-    <div class="plates">${ars.map((pl,i)=>{ const st=plateStats(pl);
+    <div class="plates">
+      <div class="plate-card special"><div class="pc-head">
+        <button class="plate-img" data-act="pimg" data-i="core" aria-label="Escolher imagem do núcleo">${me.coreImg?`<img alt="" src="${esc(me.coreImg)}">`:icon("nucleo")}</button>
+        <div style="flex:1"><b>Núcleo Mágico</b><p class="muted" style="margin:2px 0 0;font-size:13px">Vida ${RULES.nucleoVidaBase}. Anda pelo dado Andar e não ataca.</p>${me.coreImg?`<button class="btn sm ghost" data-act="pimgDel" data-i="core">Tirar imagem</button>`:""}</div>
+        <input type="file" accept="image/*" id="pf-core" data-file="core" hidden></div></div>
+      <div class="plate-card special"><div class="pc-head">
+        <button class="plate-img" data-act="pimg" data-i="tomb" aria-label="Escolher imagem da lápide">${me.tombImg?`<img alt="" src="${esc(me.tombImg)}">`:icon("lapide")}</button>
+        <div style="flex:1"><b>Lápide</b><p class="muted" style="margin:2px 0 0;font-size:13px">Aparece no lugar das suas placas derrotadas.</p>${me.tombImg?`<button class="btn sm ghost" data-act="pimgDel" data-i="tomb">Tirar imagem</button>`:""}</div>
+        <input type="file" accept="image/*" id="pf-tomb" data-file="tomb" hidden></div></div>
+      ${ars.map((pl,i)=>{ const st=plateStats(pl);
       return `<div class="plate-card ${pl.on?"":"off"}">
         <div class="pc-head">
           <button class="plate-img" data-act="pimg" data-i="${i}" aria-label="Escolher imagem da placa ${i+1}">${pl.img?`<img alt="" src="${esc(pl.img)}">`:icon("placa")}</button>
@@ -215,7 +245,9 @@ function renderArsenal(P){
     <div><button class="btn ghost sm" data-act="arsReset">Voltar ao arsenal inicial</button></div></div>`;
 }
 function arsenalClick(a,b,i){
-  const ars=myArsenal(); const pl=ars[i];
+  const ars=myArsenal(); const pl=ars[i]; const sp=b.dataset.i;
+  if(a==="pimg" && (sp==="core"||sp==="tomb")){ document.getElementById("pf-"+sp)?.click(); return; }
+  if(a==="pimgDel" && (sp==="core"||sp==="tomb")){ me[sp+"Img"]=null; save(); renderPanel(); return; }
   if(a==="pt"){ const k=b.dataset.k, d=+b.dataset.d, A=ATTRS.find(x=>x.k===k), nv=pl.p[k]+d;
     if(nv<0||nv>A.maxP) return;
     if(d>0 && pl.on && arsenalPoints(ars)>=RULES.pontosArsenal) return toast("Sem pontos livres. Tire pontos de outra placa ou deixe uma placa fora de campo.");
@@ -233,25 +265,32 @@ document.getElementById("panel").addEventListener("change", async e => {
     if(t.checked && arsenalPoints(ars)+platePoints(pl)>RULES.pontosArsenal){ t.checked=false; return toast(`Faltam pontos: esta placa usa ${platePoints(pl)}. Tire pontos dela ou de outra placa.`); }
     if(!t.checked && ars.filter(x=>x.on).length<=1){ t.checked=true; return toast("Pelo menos uma placa precisa ficar em campo."); }
     pl.on=t.checked; save(); renderPanel(); }
-  else if(t.dataset.file!=null && t.files?.[0]){ try{ ars[+t.dataset.file].img=await shrinkImage(t.files[0],96); save(); renderPanel(); }catch(err){ toast(err.message); } }
+  else if(t.dataset.file!=null && t.files?.[0]){ try{ const img=await shrinkImage(t.files[0],96); if(t.dataset.file==="core"||t.dataset.file==="tomb") me[t.dataset.file+"Img"]=img; else ars[+t.dataset.file].img=img; save(); renderPanel(); }catch(err){ toast(err.message); } }
 });
 document.getElementById("panel").addEventListener("input", e => { if(me && view==="arsenal" && e.target.dataset.name!=null){ myArsenal()[+e.target.dataset.name].name=e.target.value.slice(0,20); save(); } });
 
 /* ================= conexão entre aparelhos ================= */
 const NATIVE = !!window.Capacitor?.isNativePlatform?.();
 const Link = NATIVE ? (window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin("Link") : window.Capacitor.Plugins.Link) : makeSimLink();
-const NET = {role:null, via:null, connected:false, room:null, peerAddr:null, peerName:null, offset:0, lastJoin:null, btName:null, stage:null, roomInfo:null, sentFriend:false};
-const PROTO = 2;
+/* host: peers = {idDaConexão:{name, side, addr, connected}}; roster = jogadores na sala de espera */
+const NET = {role:null, via:null, mode:"1x1", connected:false, room:null, peers:{}, roster:[], offset:0, lastJoin:null, stage:null, roomInfo:null, sentFriend:new Set()};
+const PROTO = 3;
 let btFound = [];
-async function netSend(msg){ try{ await Link.send({data:JSON.stringify(msg)}); }catch(e){ /* disconnected handler shows the state */ } }
-async function netClose(){ try{ await Link.close(); }catch(e){} Object.assign(NET,{role:null,via:null,connected:false,room:null,peerAddr:null,peerName:null,offset:0,stage:null,roomInfo:null,sentFriend:false}); $("#netOverlay").hidden=true; }
+const needPlayers = mode => mode==="2x2" ? 4 : 2;
+async function netSend(msg,peer){ try{ await Link.send(peer?{data:JSON.stringify(msg),peer}:{data:JSON.stringify(msg)}); }catch(e){ /* quem caiu é tratado no evento de desconexão */ } }
+function forward(msg,exceptPeer){ for(const [id,p] of Object.entries(NET.peers)) if(id!==exceptPeer && p.connected) netSend(msg,id); }
+function peerByName(name){ return Object.entries(NET.peers).find(([id,p])=>p.connected&&keyOf(p.name)===keyOf(name))?.[0]; }
+function netOk(){ if(!G||!G.net) return true; if(NET.role==="guest") return NET.connected; return G.mode==="2x2" || Object.values(NET.peers).some(p=>p.connected&&p.side); }
+async function netClose(){ try{ await Link.close(); }catch(e){} Object.assign(NET,{role:null,via:null,connected:false,room:null,peers:{},roster:[],offset:0,stage:null,roomInfo:null,sentFriend:new Set()}); $("#netOverlay").hidden=true; }
 function netCard(html){ $("#netCard").innerHTML=html; $("#netOverlay").hidden=false; }
 document.getElementById("netCard").addEventListener("click", e => { const b=e.target.closest("[data-net]"); if(!b) return; const a=b.dataset.net;
   if(a==="cancel"){ netClose(); }
   else if(a==="visible"){ Link.btDiscoverable().catch(()=>toast("Não foi possível deixar o aparelho visível.")); }
   else if(a==="retry" && NET.lastJoin){ const j=NET.lastJoin; j.via==="tcp"?joinByIp(j.ip):joinByBt(j.addr,j.name); }
-  else if(a==="closeOverlay"){ $("#netOverlay").hidden=true; }
+  else if(a==="start"){ if(NET.roster.length>=needPlayers(NET.mode)-1) startNetSeries(); }
 });
+function sanitizeImgs(x){ const ok=v=>typeof v==="string"&&v.startsWith("data:image/")&&v.length<200000?v:null;
+  return {plates:(Array.isArray(x?.plates)?x.plates:[]).slice(0,MAX_PLATES).map(ok), core:ok(x?.core), tomb:ok(x?.tomb)}; }
 
 async function ensureBt(){
   try{
@@ -261,25 +300,34 @@ async function ensureBt(){
     return true;
   }catch(e){ toast(e?.message||"Bluetooth indisponível."); return false; }
 }
+function hostCard(){
+  const R=NET.room, need=needPlayers(NET.mode), have=NET.roster.length+1;
+  const where = NET.via==="tcp"
+    ? `<p style="margin:0">Peça para os outros jogadores digitarem este IP em <b>Jogar → Entrar pelo IP</b>:</p><p class="bigip num">${esc(R.ip)}</p>`
+    : `<p style="margin:0">Os outros jogadores tocam em <b>Procurar sala por Bluetooth</b> e escolhem:</p><p class="bigip">${esc(R.btName||"este aparelho")}</p><p class="muted" style="margin:0;font-size:13px">Se os aparelhos ainda não foram pareados, deixe este visível.</p>`;
+  const names=[me.name,...NET.roster.map(x=>x.name)];
+  const teams = NET.mode==="2x2" ? `<div class="teams"><div><span class="label">Time A</span><b>${esc(names[0])}</b><b>${esc(names[2]||"aguardando…")}</b></div><div><span class="label">Time B</span><b>${esc(names[1]||"aguardando…")}</b><b>${esc(names[3]||"aguardando…")}</b></div></div>` : "";
+  netCard(`<span class="label">Sala ${NET.mode==="2x2"?"2 x 2":"1 x 1"} aberta ${NET.via==="tcp"?"no Wi-Fi":"por Bluetooth"}</span><h2 style="font-size:24px">${esc(R.title)}</h2>${where}
+    ${teams}<p class="muted" style="margin:0;font-size:13px">Turnos de ${fmtS(R.turnSec)}${R.hasPass?" · com senha":""} · ${have} de ${need} jogadores</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${NET.via==="bt"?`<button class="btn" data-net="visible">Ficar visível</button>`:""}${NET.mode==="2x2"?`<button class="btn primary" data-net="start" ${have<need?"disabled":""}>Começar série</button>`:""}<button class="btn danger" data-net="cancel">Fechar sala</button></div>`);
+}
 async function hostRoom(via){
   const title=$("#nrTitle").value.trim(); if(!title){ toast("Dê um título para a sala."); $("#nrTitle").focus(); return; }
-  const pass=$("#nrPass").value, turnSec=+$("#nrTurn").value; STORE.lastTitle=title; STORE.lastTurn=turnSec; save();
+  const pass=$("#nrPass").value, turnSec=+$("#nrTurn").value, mode=document.querySelector('input[name="nrMode"]:checked')?.value||"1x1";
+  STORE.lastTitle=title; STORE.lastTurn=turnSec; STORE.lastMode=mode; save();
   if(G && G.net && !G.series.done){ toast("Termine a série atual antes de criar outra sala."); return; }
   await netClose(); const salt=uidStr();
-  NET.room={title,hasPass:!!pass,passHash:pass?await sha("tm:"+salt+":"+pass):null,salt,turnSec}; NET.role="host"; NET.via=via; NET.stage="waiting";
+  NET.room={title,hasPass:!!pass,passHash:pass?await sha("tm:"+salt+":"+pass):null,salt,turnSec}; NET.role="host"; NET.via=via; NET.mode=mode; NET.stage="waiting";
+  const maxPeers=needPlayers(mode)-1;
   try{
     if(via==="tcp"){
-      const {ip,port}=await Link.getLocalIp(); await Link.tcpHost({port});
-      if(!ip){ netCard(`<h2>Sem Wi-Fi</h2><p>Conecte o aparelho a uma rede Wi-Fi (ou ligue o roteador/hotspot) e tente de novo.</p><button class="btn" data-net="cancel">Fechar</button>`); return; }
-      netCard(`<span class="label">Sala aberta no Wi-Fi</span><h2 style="font-size:24px">${esc(title)}</h2><p style="margin:0">Peça para o outro jogador digitar este IP em <b>Jogar → Entrar pelo IP</b>:</p>
-        <p class="bigip num">${esc(ip)}</p><p class="muted" style="margin:0;font-size:13px">Turnos de ${fmtS(turnSec)}${pass?" · com senha":""} · aguardando oponente…</p><button class="btn danger" data-net="cancel">Fechar sala</button>`);
+      const {ip,port}=await Link.getLocalIp(); if(!ip){ NET.role=null; netCard(`<h2>Sem Wi-Fi</h2><p>Conecte o aparelho a uma rede Wi-Fi (ou ligue o roteador/hotspot) e tente de novo.</p><button class="btn" data-net="cancel">Fechar</button>`); return; }
+      await Link.tcpHost({port,maxPeers}); NET.room.ip=ip;
     } else {
       if(!(await ensureBt())){ NET.role=null; return; }
-      const r=await Link.btHost(); NET.btName=r.name;
-      netCard(`<span class="label">Sala aberta por Bluetooth</span><h2 style="font-size:24px">${esc(title)}</h2><p style="margin:0">O outro jogador deve tocar em <b>Procurar sala por Bluetooth</b> e escolher:</p>
-        <p class="bigip">${esc(r.name||"este aparelho")}</p><p class="muted" style="margin:0;font-size:13px">Se os aparelhos ainda não foram pareados, deixe este visível para o outro encontrar.</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn" data-net="visible">Ficar visível</button><button class="btn danger" data-net="cancel">Fechar sala</button></div>`);
+      const r=await Link.btHost({maxPeers}); NET.room.btName=r.name;
     }
+    hostCard();
   }catch(e){ NET.role=null; netCard(`<h2>Não deu para abrir a sala</h2><p>${esc(e?.message||"Erro desconhecido.")}</p><button class="btn" data-net="cancel">Fechar</button>`); }
 }
 async function joinByIp(ip){
@@ -307,149 +355,150 @@ async function joinByBt(addr,name){
   try{ await Link.btJoin({address:addr}); }catch(e){ if(NET.role!=="guest") return; NET.stage=null; netCard(`<h2>Não conectou</h2><p>${esc(e?.message||"Não foi possível conectar.")}</p><div style="display:flex;gap:8px;justify-content:center"><button class="btn" data-net="retry">Tentar de novo</button><button class="btn ghost" data-net="cancel">Fechar</button></div>`); }
 }
 
-/* link events */
+/* ---- eventos da conexão ---- */
 Link.addListener("btDevice", d => { if(!d?.address || btFound.some(x=>x.address===d.address)) return; btFound.push({name:d.name,address:d.address,paired:false}); renderBtList(true); });
 Link.addListener("btScanDone", () => renderBtList(false));
 Link.addListener("connected", d => {
-  NET.connected=true; NET.peerAddr=d.address||null;
-  if(NET.role==="host"){ netSend({t:"room",v:PROTO,title:NET.room.title,hasPass:NET.room.hasPass,salt:NET.room.salt,turnSec:NET.room.turnSec,host:me.name,hostAvatar:null}); }
-  else { netSend({t:"ping",t0:Date.now()}); }
+  if(NET.role==="host"){ NET.peers[d.peer]={name:null,side:null,addr:d.address||null,connected:true};
+    const R=NET.room; netSend({t:"room",v:PROTO,title:R.title,hasPass:R.hasPass,salt:R.salt,turnSec:R.turnSec,host:me.name,mode:NET.mode,have:NET.roster.length+1},d.peer); }
+  else { NET.connected=true; NET.peerAddr=d.address||null; netSend({t:"ping",t0:Date.now()}); }
   renderNetBanner();
 });
 Link.addListener("disconnected", d => {
-  const wasPlaying = G && G.net && !G.series.done;
-  NET.connected=false; NET.sentFriend=false;
   if(NET.role==="host"){
-    if(wasPlaying){ toast(`${NET.peerName||"O oponente"} desconectou. A sala continua aberta para ele voltar.`); }
-    else if(NET.stage==="waiting"||NET.stage==="joining"){ NET.stage="waiting"; }
+    const p=NET.peers[d.peer]; if(!p) return; p.connected=false;
+    if(G && G.net && !G.series.done && p.side){ toast(`${p.name||"Um jogador"} desconectou. A sala continua aberta para ele voltar.`); }
+    else { NET.roster=NET.roster.filter(x=>x.peer!==d.peer); delete NET.peers[d.peer]; if(NET.stage==="waiting"){ sendLobby(); hostCard(); } }
   } else if(NET.role==="guest"){
+    const wasPlaying = G && G.net && !G.series.done; NET.connected=false;
     if(wasPlaying){ toast("Conexão perdida com a sala."); }
     else if(NET.stage && NET.stage!=="connecting"){ netCard(`<h2>Conexão encerrada</h2><p>${esc(d?.reason||"A sala foi fechada.")}</p><div style="display:flex;gap:8px;justify-content:center"><button class="btn" data-net="retry">Tentar de novo</button><button class="btn ghost" data-net="cancel">Fechar</button></div>`); }
   }
   renderNetBanner();
 });
 Link.addListener("error", d => toast(d?.message||"Erro de conexão."));
-Link.addListener("data", d => { let m; try{ m=JSON.parse(d.line); }catch(e){ return; } onNet(m); });
+Link.addListener("data", d => { let m; try{ m=JSON.parse(d.line); }catch(e){ return; } NET.role==="host" ? onHostMsg(m,d.peer) : onGuestMsg(m); });
 
-async function onNet(m){
-  if(m.t==="room" && NET.role==="guest"){
-    NET.roomInfo=m; NET.stage="room"; NET.peerName=m.host;
-    if(m.v!==PROTO){ netCard(`<h2>Versões diferentes</h2><p>O app do outro jogador é de outra versão. Atualizem os dois aparelhos.</p><button class="btn" data-net="cancel">Fechar</button>`); return; }
-    // reconexão a um duelo em andamento
-    if(G && G.net && !G.series.done && G.players.p1.name===m.host){ netSend({t:"join",name:me.name,pass:null,resume:true}); netCard(`<h2>Reconectando…</h2><p>Voltando ao duelo contra ${esc(m.host)}.</p>`); return; }
-    netCard(`<span class="label">Sala de ${esc(m.host)}</span><h2 style="font-size:24px">${esc(m.title)}</h2><p class="muted" style="margin:0">Turnos de ${fmtS(m.turnSec)}</p>
+function sendLobby(){ const names=[me.name,...NET.roster.map(x=>x.name)]; forward({t:"lobby",names,need:needPlayers(NET.mode),mode:NET.mode}); }
+function onHostMsg(m,peer){
+  const P=NET.peers[peer]; if(!P) return;
+  if(m.t==="ping") netSend({t:"pong",t0:m.t0,th:Date.now()},peer);
+  else if(m.t==="join"){
+    const name=String(m.name||"").slice(0,16), k=keyOf(name);
+    const reject=(msg,drop)=>{ netSend({t:"reject",msg},peer); if(drop) setTimeout(()=>Link.disconnect({peer}).catch(()=>{}),300); };
+    if(G && G.net && !G.series.done){
+      const side=G.order.find(s=>s!==mySide && keyOf(G.players[s].name)===k);
+      if(!side) return reject("Essa sala já está numa série.",true);
+      P.name=name; P.side=side; netSend({t:"start",g:G},peer);
+      for(const s of G.order) if(s!==side && IMGS[s]) netSend({t:"imgs",side:s,imgs:IMGS[s]},peer);
+      toast(`${name} voltou à série.`); renderNetBanner(); return;
+    }
+    if(NET.room.hasPass && m.pass!==NET.room.passHash) return reject("Senha da sala incorreta.");
+    if(k===me.key || NET.roster.some(x=>keyOf(x.name)===k)) return reject("Já tem alguém com esse nome na sala. Entre com outra conta.",true);
+    if(NET.roster.length>=needPlayers(NET.mode)-1) return reject("A sala está cheia.",true);
+    P.name=name; NET.roster.push({peer,name,arsenal:m.arsenal});
+    sendLobby(); hostCard();
+    if(NET.mode==="1x1") startNetSeries();
+  }
+  else if(m.t==="imgs" && G && P.side){ IMGS[P.side]=sanitizeImgs(m.imgs); forward({t:"imgs",side:P.side,imgs:IMGS[P.side]},peer); renderBoard(); }
+  else if(m.t==="state" && G && G.net && m.g && m.g.roomId===G.roomId && (m.g.seq||0)>(G.seq||0)){ applyRemote(m.g); forward({t:"state",g:m.g},peer); }
+  else if(m.t==="friend"||m.t==="friendOk"){
+    if(keyOf(m.to)===me.key) onFriendMsg(m, {ip:NET.via==="tcp"?P.addr:null, bt:NET.via==="bt"?P.addr:null});
+    else { const to=peerByName(m.to); if(to) netSend(m,to); }
+  }
+}
+function onGuestMsg(m){
+  if(m.t==="room"){
+    NET.roomInfo=m; NET.stage="room"; NET.peerName=m.host; NET.mode=m.mode||"1x1";
+    if(m.v!==PROTO){ netCard(`<h2>Versões diferentes</h2><p>O app de quem criou a sala é de outra versão. Atualizem todos os aparelhos.</p><button class="btn" data-net="cancel">Fechar</button>`); return; }
+    if(G && G.net && !G.series.done && G.players.p1.name===m.host){ netSend({t:"join",name:me.name,pass:null,resume:true}); netCard(`<h2>Reconectando…</h2><p>Voltando à série de ${esc(m.host)}.</p>`); return; }
+    netCard(`<span class="label">Sala ${NET.mode==="2x2"?"2 x 2":"1 x 1"} de ${esc(m.host)}</span><h2 style="font-size:24px">${esc(m.title)}</h2><p class="muted" style="margin:0">Turnos de ${fmtS(m.turnSec)} · ${m.have} de ${needPlayers(NET.mode)} jogadores</p>
       <form id="roomJoinF" style="display:grid;gap:10px">${m.hasPass?`<div class="field"><label class="label" for="rjPass">Senha da sala</label><input id="rjPass" type="password" required></div>`:""}
-      <div class="err" id="rjErr"></div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${!isFriendName(m.host)?`<button class="btn ghost" type="button" id="rjFriend">+ Adicionar amigo</button>`:""}<button class="btn primary" type="submit">Entrar no duelo</button><button class="btn ghost" type="button" data-net="cancel">Sair</button></div></form>`);
-    const f=document.getElementById("rjFriend"); if(f) f.onclick=()=>sendFriendReq();
+      <div class="err" id="rjErr"></div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${!isFriendName(m.host)?`<button class="btn ghost" type="button" id="rjFriend">+ Adicionar ${esc(m.host)}</button>`:""}<button class="btn primary" type="submit">Entrar</button><button class="btn ghost" type="button" data-net="cancel">Sair</button></div></form>`);
+    const f=document.getElementById("rjFriend"); if(f) f.onclick=()=>{ sendFriendReq(m.host); f.hidden=true; };
     $("#roomJoinF").onsubmit=async e=>{ e.preventDefault(); const p=document.getElementById("rjPass")?.value||""; NET.stage="joining";
       netSend({t:"join",name:me.name,pass:m.hasPass?await sha("tm:"+m.salt+":"+p):null,arsenal:publicArsenal(myArsenal())}); };
   }
-  else if(m.t==="ping" && NET.role==="host"){ netSend({t:"pong",t0:m.t0,th:Date.now()}); }
-  else if(m.t==="pong" && NET.role==="guest"){ const now=Date.now(); NET.offset = m.th - (m.t0+now)/2; }
-  else if(m.t==="join" && NET.role==="host"){
-    const name=String(m.name||"").slice(0,16); NET.peerName=name;
-    if(G && G.net && !G.series.done){
-      if(keyOf(G.players.p2.name)===keyOf(name)){ netSend({t:"start",g:G}); sendImgs(); toast(`${name} voltou ao duelo.`); renderNetBanner(); return; }
-      netSend({t:"reject",msg:"Essa sala já está num duelo."}); setTimeout(()=>Link.disconnect().catch(()=>{}),300); return;
-    }
-    if(NET.room.hasPass && m.pass!==NET.room.passHash){ netSend({t:"reject",msg:"Senha da sala incorreta."}); return; }
-    if(keyOf(name)===me.key){ netSend({t:"reject",msg:"Você está usando o mesmo nome de quem criou a sala. Entre com outra conta."}); setTimeout(()=>Link.disconnect().catch(()=>{}),300); return; }
-    const g=newSeries("net-"+Date.now(),{title:NET.room.title,turnSec:NET.room.turnSec},me,{key:keyOf(name),name},publicArsenal(myArsenal()),m.arsenal,genCombos()); g.net=true; g.via=NET.via;
-    IMGS={p1:myArsenal().filter(x=>x.on).slice(0,MAX_PLATES).map(x=>x.img||null),p2:[]};
-    netSend({t:"start",g}); NET.stage="playing"; $("#netOverlay").hidden=true; openNetGame(g); sendImgs();
-  }
-  else if(m.t==="reject" && NET.role==="guest"){ NET.stage="room"; const er=document.getElementById("rjErr"); if(er) er.textContent=m.msg; else netCard(`<h2>Não deu para entrar</h2><p>${esc(m.msg)}</p><button class="btn" data-net="cancel">Fechar</button>`); }
-  else if(m.t==="start" && NET.role==="guest"){ NET.stage="playing"; $("#netOverlay").hidden=true;
-    IMGS.p2=myArsenal().filter(x=>x.on).slice(0,MAX_PLATES).map(x=>x.img||null); openNetGame(m.g); sendImgs(); }
-  else if(m.t==="imgs"){ const side=G&&keyOf(G.players.p1.name)===keyOf(m.name)?"p1":"p2"; IMGS[side]=(Array.isArray(m.imgs)?m.imgs:[]).slice(0,MAX_PLATES).map(x=>typeof x==="string"&&x.startsWith("data:image/")?x:null); if(G) renderBoard(); }
+  else if(m.t==="pong"){ const now=Date.now(); NET.offset = m.th - (m.t0+now)/2; }
+  else if(m.t==="lobby" && NET.stage!=="playing"){ NET.stage="lobby";
+    const n=m.names, teams=m.mode==="2x2"?`<div class="teams"><div><span class="label">Time A</span><b>${esc(n[0])}</b><b>${esc(n[2]||"aguardando…")}</b></div><div><span class="label">Time B</span><b>${esc(n[1]||"aguardando…")}</b><b>${esc(n[3]||"aguardando…")}</b></div></div>`:"";
+    netCard(`<span class="label">Sala de ${esc(n[0])}</span><h2 style="font-size:24px">Aguardando jogadores</h2>${teams}<p class="muted" style="margin:0">${n.length} de ${m.need} jogadores. ${m.mode==="2x2"?`${esc(n[0])} começa a série quando todos entrarem.`:""}</p><button class="btn ghost" data-net="cancel">Sair da sala</button>`); }
+  else if(m.t==="reject"){ NET.stage="room"; const er=document.getElementById("rjErr"); if(er) er.textContent=m.msg; else netCard(`<h2>Não deu para entrar</h2><p>${esc(m.msg)}</p><button class="btn" data-net="cancel">Fechar</button>`); }
+  else if(m.t==="start"){ NET.stage="playing"; $("#netOverlay").hidden=true; openNetGame(m.g); IMGS[mySide]=myImgs(); netSend({t:"imgs",imgs:IMGS[mySide]}); }
+  else if(m.t==="imgs" && m.side){ IMGS[m.side]=sanitizeImgs(m.imgs); if(G) renderBoard(); }
   else if(m.t==="state" && G && G.net && m.g && m.g.roomId===G.roomId && (m.g.seq||0)>(G.seq||0)){ applyRemote(m.g); }
-  else if(m.t==="friend"){ const nm=String(m.name||"").slice(0,16); if(isFriendName(nm)) { netSend({t:"friendOk",name:me.name}); return; }
-    const inv=myInvites(); if(!inv.some(v=>keyOf(v.name)===keyOf(nm))) inv.push({name:nm,...peerContact(),at:Date.now()}); save(); renderInvitesBadge();
-    showFriendPrompt(nm); }
-  else if(m.t==="friendOk"){ const nm=String(m.name||"").slice(0,16); addFriendLocal({name:nm,...peerContact()}); STORE.invites[me.key]=myInvites().filter(v=>keyOf(v.name)!==keyOf(nm)); save(); renderInvitesBadge(); toast(`${nm} aceitou. Agora vocês são amigos.`); if(G) renderCards(); }
-  else if(m.t==="leave"){ toast(`${NET.peerName||"O oponente"} saiu da sala.`); }
+  else if((m.t==="friend"||m.t==="friendOk") && keyOf(m.to)===me.key){ onFriendMsg(m, keyOf(m.from)===keyOf(NET.peerName) ? (NET.via==="tcp"?{ip:NET.lastJoin?.ip}:{bt:NET.lastJoin?.addr,btName:NET.lastJoin?.name}) : {}); }
 }
-function sendImgs(){ if(!G||!mySide) return; netSend({t:"imgs",name:me.name,imgs:IMGS[mySide]||[]}); }
-function peerContact(){ return NET.via==="tcp" ? {ip: NET.role==="guest" ? NET.lastJoin?.ip : NET.peerAddr} : {bt: NET.role==="guest" ? NET.lastJoin?.addr : NET.peerAddr, btName: NET.role==="guest" ? NET.lastJoin?.name : null}; }
-function sendFriendReq(){ if(!NET.connected){ toast("Sem conexão com o oponente."); return; } netSend({t:"friend",name:me.name}); NET.sentFriend=true; toast("Convite de amizade enviado."); const f=document.getElementById("rjFriend"); if(f) f.hidden=true; if(G) renderCards(); }
-function showFriendPrompt(nm){
+function startNetSeries(){
+  const R=NET.room, need=needPlayers(NET.mode); if(NET.roster.length<need-1) return;
+  const players=[{key:me.key,name:me.name,arsenal:publicArsenal(myArsenal())},...NET.roster.slice(0,need-1).map(x=>({key:keyOf(x.name),name:x.name,arsenal:x.arsenal}))];
+  const g=newSeries("net-"+Date.now(),{title:R.title,turnSec:R.turnSec},NET.mode,players,genCombos()); g.net=true; g.via=NET.via;
+  NET.roster.slice(0,need-1).forEach((x,i)=>{ const p=NET.peers[x.peer]; if(p) p.side=g.order[i+1]; });
+  IMGS={p1:myImgs()};
+  NET.stage="playing"; $("#netOverlay").hidden=true; forward({t:"start",g}); openNetGame(g); forward({t:"imgs",side:"p1",imgs:IMGS.p1});
+}
+/* ---- amizade: convites passam por quem criou a sala ---- */
+function sendFriendReq(to){ if(NET.role==="guest"&&!NET.connected || NET.role==="host"&&!peerByName(to)) return toast("Sem conexão com esse jogador.");
+  const msg={t:"friend",from:me.name,to}; if(NET.role==="host") netSend(msg,peerByName(to)); else netSend(msg);
+  NET.sentFriend.add(keyOf(to)); toast(`Convite de amizade enviado para ${to}.`); if(G) renderCards(); }
+function onFriendMsg(m,contact){
+  const nm=String(m.from||"").slice(0,16); if(!nm) return;
+  if(m.t==="friendOk"){ addFriendLocal({name:nm,...contact}); STORE.invites[me.key]=myInvites().filter(v=>keyOf(v.name)!==keyOf(nm)); save(); renderInvitesBadge(); toast(`${nm} aceitou. Agora vocês são amigos.`); if(G) renderCards(); return; }
+  const reply=()=>{ const r={t:"friendOk",from:me.name,to:nm}; if(NET.role==="host") netSend(r,peerByName(nm)); else netSend(r); };
+  if(isFriendName(nm)){ reply(); return; }
+  const inv=myInvites(); if(!inv.some(v=>keyOf(v.name)===keyOf(nm))) inv.push({name:nm,...contact,at:Date.now()}); save(); renderInvitesBadge();
   modal(`<h2>Convite de amizade</h2><p><b>${esc(nm)}</b> quer ser seu amigo.</p><div style="display:flex;gap:8px;justify-content:center"><button class="btn primary" id="fpOk">Aceitar</button><button class="btn ghost" id="fpNo">Depois</button></div>`);
-  $("#fpOk").onclick=()=>{ const inv=myInvites(); const v=inv.find(x=>keyOf(x.name)===keyOf(nm)); STORE.invites[me.key]=inv.filter(x=>x!==v); addFriendLocal(v||{name:nm,...peerContact()}); save(); renderInvitesBadge(); netSend({t:"friendOk",name:me.name}); closeModal(); toast(`${nm} agora é seu amigo.`); if(G) renderCards(); if(view==="friends") renderPanel(); };
+  $("#fpOk").onclick=()=>{ const v=myInvites().find(x=>keyOf(x.name)===keyOf(nm)); STORE.invites[me.key]=myInvites().filter(x=>x!==v); addFriendLocal(v||{name:nm,...contact}); save(); renderInvitesBadge(); reply(); closeModal(); toast(`${nm} agora é seu amigo.`); if(G) renderCards(); if(view==="friends") renderPanel(); };
   $("#fpNo").onclick=closeModal;
 }
 function renderNetBanner(){
   const B=$("#gNetBanner"), L=$("#gLink"); if(!G||!G.net){ B.hidden=true; L.hidden=true; return; }
-  L.hidden=false; L.innerHTML=`<span class="dot ${NET.connected?"on":""}"></span>${G.via==="bt"?"Bluetooth":"Wi-Fi"}`;
-  if(NET.connected || G.series.done){ B.hidden=true; return; }
+  const ok = NET.role==="guest" ? NET.connected : Object.values(NET.peers).some(p=>p.connected&&p.side);
+  L.hidden=false; L.innerHTML=`<span class="dot ${ok?"on":""}"></span>${G.via==="bt"?"Bluetooth":"Wi-Fi"}`;
+  const away = NET.role==="host" ? G.order.filter(s=>s!==mySide && !Object.values(NET.peers).some(p=>p.connected&&p.side===s)).map(s=>G.players[s].name) : [];
+  if(G.series.done || (NET.role==="guest" ? NET.connected : !away.length)){ B.hidden=true; return; }
   B.hidden=false;
   B.innerHTML = NET.role==="host"
-    ? `<div class="grow"><b>${esc(G.players.p2.name)} desconectou.</b> A sala continua aberta: ele pode entrar de novo pelo mesmo ${G.via==="bt"?"Bluetooth":"IP"}.</div>`
-    : `<div class="grow"><b>Conexão perdida.</b> O duelo fica pausado até você voltar.</div><button class="btn sm gold" id="nbRetry">Reconectar</button>`;
+    ? `<div class="grow"><b>${esc(away.join(", "))} ${away.length>1?"estão":"está"} fora da sala.</b> A sala continua aberta para voltar${G.mode==="2x2"?"; a vez de quem está fora passa sozinha quando o tempo acaba":""}.</div>`
+    : `<div class="grow"><b>Conexão perdida.</b> ${G.mode==="2x2"?"A série continua para os outros; volte o quanto antes.":"O duelo fica pausado até você voltar."}</div><button class="btn sm gold" id="nbRetry">Reconectar</button>`;
   const r=document.getElementById("nbRetry"); if(r) r.onclick=()=>{ const j=NET.lastJoin; if(!j) return; j.via==="tcp"?reconnectIp(j.ip):reconnectBt(j.addr,j.name); };
 }
 async function reconnectIp(ip){ NET.role="guest"; NET.via="tcp"; toast("Reconectando…"); try{ await Link.tcpJoin({ip}); }catch(e){ toast(e?.message||"Não foi possível reconectar."); } }
 async function reconnectBt(addr,name){ NET.role="guest"; NET.via="bt"; toast("Reconectando…"); try{ await Link.btJoin({address:addr}); }catch(e){ toast(e?.message||"Não foi possível reconectar."); } }
 
-/* simulated link for testing in a normal browser (two tabs on the same computer) */
+/* conexão simulada para testar no navegador (várias abas no mesmo computador) */
 function makeSimLink(){
   const ch = ("BroadcastChannel" in window) ? new BroadcastChannel("tm-sim") : null;
-  const id = Math.random().toString(36).slice(2); let hosting=false, peer=null; const ls={};
+  const id = Math.random().toString(36).slice(2); let hosting=false, maxPeers=1, host=null; const peers=new Set(), ls={};
   const emit=(ev,d)=>(ls[ev]||[]).forEach(f=>f(d));
   const post=m=>ch&&ch.postMessage({...m,from:id});
+  let pendingJoin=null;
   ch && (ch.onmessage = ({data:m}) => {
     if(m.to && m.to!==id) return;
-    if(m.k==="hello" && hosting && !peer){ peer=m.from; post({k:"accept",to:m.from}); emit("connected",{via:"sim",address:"127.0.0.1"}); }
-    else if(m.k==="accept" && pendingJoin){ peer=m.from; const r=pendingJoin; pendingJoin=null; emit("connected",{via:"sim",address:"127.0.0.1"}); r(); }
-    else if(m.k==="data" && m.from===peer) emit("data",{line:m.data});
-    else if(m.k==="bye" && m.from===peer){ peer=null; emit("disconnected",{reason:"O outro jogador saiu."}); }
+    if(m.k==="hello" && hosting && !m.to && peers.size<maxPeers && !pendingJoin){ peers.add(m.from); post({k:"accept",to:m.from}); emit("connected",{via:"sim",address:"127.0.0.1",peer:m.from}); }
+    else if(m.k==="accept" && pendingJoin){ host=m.from; const r=pendingJoin; pendingJoin=null; emit("connected",{via:"sim",address:"127.0.0.1",peer:m.from}); r(); }
+    else if(m.k==="data" && (peers.has(m.from)||m.from===host)) emit("data",{line:m.data,peer:m.from});
+    else if(m.k==="bye"){ if(peers.delete(m.from)) emit("disconnected",{peer:m.from,reason:"O jogador saiu."}); else if(m.from===host){ host=null; emit("disconnected",{peer:m.from,reason:"A sala foi fechada."}); } }
   });
-  let pendingJoin=null;
-  const join=()=>new Promise((res,rej)=>{ pendingJoin=res; post({k:"hello"}); setTimeout(()=>{ if(pendingJoin){ pendingJoin=null; rej({message:"Não encontrei uma sala nesse IP. (modo de teste: abra a sala em outra aba)"}); } },1500); });
+  const join=()=>new Promise((res,rej)=>{ maxPeers=1; pendingJoin=res; post({k:"hello"}); setTimeout(()=>{ if(pendingJoin){ pendingJoin=null; rej({message:"Não encontrei uma sala nesse IP. (modo de teste: abra a sala em outra aba)"}); } },1500); });
   return {
     addListener(ev,f){ (ls[ev] ||= []).push(f); return {remove(){}}; },
     async getLocalIp(){ return {ip:"127.0.0.1",port:47800}; },
-    async tcpHost(){ hosting=true; }, async btHost(){ hosting=true; return {name:"Aparelho de teste"}; },
+    async tcpHost(o){ hosting=true; maxPeers=o?.maxPeers||1; }, async btHost(o){ hosting=true; maxPeers=o?.maxPeers||1; return {name:"Aparelho de teste"}; },
     tcpJoin: join, btJoin: join,
     async btStatus(){ return {available:true,enabled:true,granted:true}; }, async btPermissions(){ return {granted:true}; },
     async btEnable(){}, async btDiscoverable(){}, async btPaired(){ return {devices:[{name:"Aparelho de teste",address:"SIM"}]}; },
     async btScan(){ setTimeout(()=>emit("btScanDone",{}),300); },
-    async send({data}){ if(!peer) throw {message:"Sem conexão."}; post({k:"data",to:peer,data}); },
-    async disconnect(){ if(peer){ post({k:"bye",to:peer}); peer=null; emit("disconnected",{reason:"Conexão encerrada."}); } },
-    async close(){ if(peer){ post({k:"bye",to:peer}); } peer=null; hosting=false; }
+    async send({data,peer}){ const targets = hosting ? (peer?[peer]:[...peers]) : (host?[host]:[]); if(!targets.length) throw {message:"Sem conexão."}; for(const t of targets) post({k:"data",to:t,data}); },
+    async disconnect(o){ const list=o?.peer?[o.peer]:hosting?[...peers]:(host?[host]:[]); for(const t of list){ post({k:"bye",to:t}); if(peers.delete(t)||t===host){ if(t===host) host=null; emit("disconnected",{peer:t,reason:"Conexão encerrada."}); } } },
+    async close(){ for(const t of peers) post({k:"bye",to:t}); if(host) post({k:"bye",to:host}); peers.clear(); host=null; hosting=false; }
   };
 }
 
-/* ================= game: série melhor de 3 ================= */
-function buildPieces(g){
-  const pieces=[]; let n=0;
-  for(const side of ["p1","p2"]){
-    const row=r=>side==="p1"?r:7-r;
-    pieces.push({id:"k"+(n++),owner:side,type:"nucleo",plate:-1,name:"",st:{vida:g.rules.nucleoVidaBase,forca:0,atq:0,andar:0,intervalo:0},r:row(CORE_POS[0]),c:CORE_POS[1],hp:g.rules.nucleoVidaBase,maxHp:g.rules.nucleoVidaBase,element:null,cdUntil:0,sealHp:0,dead:false});
-    g.arsenals[side].forEach((pl,i)=>{ const st=plateStats(pl), [sr,sc]=SLOTS[i];
-      pieces.push({id:"k"+(n++),owner:side,type:"placa",plate:i,name:pl.name||"",st,r:row(sr),c:sc,hp:st.vida,maxHp:st.vida,element:null,cdUntil:0,sealHp:0,dead:false}); });
-  }
-  return pieces;
-}
-function startRound(g,now){
-  const first = g.series.round%2===1 ? "p1" : "p2";
-  const emptyS=()=>[{state:"empty"},{state:"empty"},{state:"empty"}];
-  Object.assign(g,{status:"playing",winner:null,turn:first,turnNo:1,turnStartedAt:now,turnEndsAt:now+g.turnSec*1000+2000,dice:freshDice(),
-    structures:[],traps:[],timed:[],field:null,mana:{p1:g.rules.manaBase,p2:g.rules.manaBase},manaMax:{p1:g.rules.manaBase,p2:g.rules.manaBase},
-    scrolls:{p1:emptyS(),p2:emptyS()},cds:{p1:{},p2:{}}});
-  g.pieces=buildPieces(g);
-  g.log=[{t:Date.now(),x:`Duelo ${g.series.round} da série. ${g.players[first].name} começa.`}];
-}
-function newSeries(id,r,host,guest,hostArs,guestArs,combos){
-  const now=gnow();
-  const g={roomId:id,title:r.title,turnSec:r.turnSec,players:{p1:{key:host.key,name:host.name},p2:{key:guest.key,name:guest.name}},
-    rules:clone(RULES),combos,arsenals:{p1:sanitizeArsenal(hostArs),p2:sanitizeArsenal(guestArs)},found:{p1:[],p2:[]},
-    series:{round:1,score:{p1:0,p2:0},done:false,winner:null},createdAt:now,updatedAt:now,seq:1};
-  startRound(g,now); return g;
-}
-const freshDice = () => ({andar:{v:null,used:false},atacar:{v:null,used:false},forca:{v:null,used:false}});
+/* ================= sincronização da série ================= */
 function openNetGame(g){
-  G=clone(g); gameId=g.roomId; mySide = keyOf(G.players.p1.name)===me.key ? "p1" : "p2";
-  sel=inspect=selScroll=null; pending=[]; spinning={};
+  G=clone(g); gameId=g.roomId; mySide = G.order.find(s=>keyOf(G.players[s].name)===me.key) || null; fxSeen=G.fx?.seq;
+  sel=inspect=selScroll=null; pending=[]; spinning={}; histOpen=false;
   showScreen("game"); $("#endOverlay").hidden=true; renderGame(); renderNetBanner();
   if(G.status==="finished") onFinished();
 }
@@ -458,70 +507,64 @@ function applyRemote(g){
   if((prev.turn!==G.turn || prev.series.round!==G.series.round) && G.turn===mySide && G.status==="playing") toast("Sua vez!");
   if(prev.turnNo!==G.turnNo || prev.series.round!==G.series.round){ spinning={}; pending=[]; selScroll=null; sel=null; inspect=null; }
   if(G.status==="playing") $("#endOverlay").hidden=true;
-  if(!$("#scr-game").hidden) renderGame(); if(G.status==="finished") onFinished();
+  if(!$("#scr-game").hidden) renderGame(); if(G.status==="finished" && prev.status!=="finished") onFinished();
 }
 $("#gBack").onclick = () => { $("#endOverlay").hidden=true;
   if(G && G.net && G.series.done){ netClose(); G=null; }
   else if(G && G.ai){ G=null; }
   showScreen("lobby"); renderProfile(); renderPanel(); };
-function settle(g,now){
-  for(const e of g.timed){ const due=Math.min(e.total,Math.floor((now-e.start)/e.every)); const add=(due-e.done)*e.amt;
-    if(add>0){ if(e.kind==="mana") g.mana[e.owner]=Math.min(g.manaMax[e.owner],g.mana[e.owner]+add); else { const c=g.pieces.find(p=>p.owner===e.owner&&p.type==="nucleo"); if(c) c.hp=Math.min(c.maxHp,c.hp+add); } }
-    e.done=due; }
-  g.timed=g.timed.filter(e=>e.done<e.total); g.traps=g.traps.filter(t=>t.until>now); return g;
-}
-const V = () => settle(clone(G),gnow());
-const isMyTurn = () => G && G.status==="playing" && G.turn===mySide && (!G.net || NET.connected);
-function addLog(g,x){ g.log.push({t:Date.now(),x}); if(g.log.length>40) g.log=g.log.slice(-40); }
+const isMyTurn = () => G && G.status==="playing" && G.turn===mySide && !G.out?.[mySide] && netOk();
 async function commit(fn){
-  if(busy||!G) return; if(G.net && !NET.connected){ toast("Sem conexão com o oponente. A jogada não foi feita."); return; }
+  if(busy||!G) return; if(G.net && !netOk()){ toast("Sem conexão com os outros jogadores. A jogada não foi feita."); return; }
   busy=true;
-  try{ const g=clone(G), now=gnow(); settle(g,now); if(fn(g,now)===false) return; g.updatedAt=now; g.seq=(g.seq||0)+1; G=g; renderGame();
-    if(g.ai){ aiGame=g; if(g.status==="finished") onFinished(); else setTimeout(maybeAi,0); return; }
-    if(g.net){ await netSend({t:"state",g}); if(g.status==="finished") onFinished(); }
+  try{ const g=clone(G), now=gnow(); settle(g,now); g.fx={seq:(G.fx?.seq||0)+1,items:[]};
+    if(fn(g,now)===false) return;
+    if(!g.fx.items.length) g.fx=G.fx||{seq:0,items:[]};
+    g.updatedAt=now; g.seq=(g.seq||0)+1; const was=G.status; G=g; renderGame();
+    if(g.ai){ aiGame=g; if(g.status==="finished"&&was!=="finished") onFinished(); else setTimeout(maybeAi,0); return; }
+    if(g.net){ await netSend({t:"state",g}); if(g.status==="finished"&&was!=="finished") onFinished(); }
   } finally { busy=false; }
 }
-function endTurn(g,now,why){
-  const nx=other(g.turn); addLog(g, why==="tempo"?`Tempo esgotado para ${g.players[g.turn].name}.`:`${g.players[g.turn].name} passou a vez.`);
-  // a recarga dos pergaminhos de quem esperava andou durante este turno
-  const waited=nx, elapsed=Math.max(0,now-(g.turnStartedAt||now));
-  for(const k of Object.keys(g.cds[waited])) g.cds[waited][k]=Math.max(0,g.cds[waited][k]-elapsed);
-  g.turn=nx; g.turnNo++; g.turnStartedAt=now; g.turnEndsAt=now+g.turnSec*1000; g.dice=freshDice();
-  g.mana[nx]=Math.min(g.manaMax[nx],g.mana[nx]+g.rules.manaPorTurno);
-}
 $("#gPass").onclick = () => { if(!isMyTurn()) return toast("Espere a sua vez."); const tn=G.turnNo; commit((g,now)=>{ if(g.turnNo!==tn) return false; endTurn(g,now,"passou"); }); };
-$("#gQuit").onclick = () => { if(G?.status==="playing" && mySide) $("#confirmQuit").hidden=false; };
+$("#gQuit").onclick = () => { if(G?.status==="playing" && mySide && !G.out?.[mySide]) $("#confirmQuit").hidden=false; };
 $("#cqNo").onclick = () => $("#confirmQuit").hidden=true;
-$("#cqYes").onclick = () => { $("#confirmQuit").hidden=true;
-  if(G.net && !NET.connected){ endRound(G,other(mySide),`${G.players[mySide].name} desistiu deste duelo.`); renderGame(); onFinished(); return; }
-  commit(g=>{ if(g.status!=="playing") return false; endRound(g,other(mySide),`${g.players[mySide].name} desistiu deste duelo.`); }); };
+$("#cqYes").onclick = () => { $("#confirmQuit").hidden=true; const side=mySide;
+  const quit=(g,now)=>{ if(g.status!=="playing"||g.out[side]) return false; const wasTurn=g.turn===side;
+    eliminate(g,side,`${g.players[side].name} desistiu deste duelo.`); if(g.status==="playing" && wasTurn) endTurn(g,now,"passou"); };
+  if(G.net && !netOk()){ quit(G,gnow()); renderGame(); if(G.status==="finished") onFinished(); return; }
+  commit(quit); };
 function nextRound(){
   commit((g,now)=>{ if(g.status!=="finished"||g.series.done) return false; g.series.round++; startRound(g,now); });
   $("#endOverlay").hidden=true; sel=inspect=selScroll=null; pending=[]; spinning={};
 }
 function onFinished(){
-  const S=G.series, me_=mySide||"p1", op=other(me_), wonRound=G.winner===me_, o=$("#endOverlay");
-  const score=`<p class="bigip num" style="margin:0">${S.score[me_]} x ${S.score[op]}</p>`;
+  const S=G.series, mt=myTeam(), ot=otherTeam(mt), wonRound=G.winner===mt, o=$("#endOverlay");
+  const score=`<p class="bigip num" style="margin:0">${S.score[mt]} x ${S.score[ot]}</p>`;
+  const vs=`<p class="muted" style="margin:0">${esc(teamName(G,mt))} x ${esc(teamName(G,ot))}</p>`;
   if(S.done){
-    const won=S.winner===me_;
-    o.innerHTML=`<div class="card"><span class="label">Fim da série · melhor de 3</span><h2>${won?"Você venceu a série!":"Série perdida"}</h2>${score}<p class="muted" style="margin:0">${esc(G.players[me_].name)} x ${esc(G.players[op].name)}</p><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn" id="eoView">Ver tabuleiro</button><button class="btn primary" id="eoBack">Voltar ao menu</button></div></div>`;
-    const key=G.roomId+":serie"; if(!finishedHandled[key]){ finishedHandled[key]=1; if(won) me.wins=(me.wins||0)+1; else me.losses=(me.losses||0)+1; save(); renderProfile(); }
+    const won=S.winner===mt;
+    o.innerHTML=`<div class="card"><span class="label">Fim da série · melhor de 3</span><h2>${won?"Vitória na série!":"Série perdida"}</h2>${score}${vs}<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn" id="eoView">Ver tabuleiro</button><button class="btn primary" id="eoBack">Voltar ao menu</button></div></div>`;
+    const key=G.roomId+":serie"; if(!finishedHandled[key]&&mySide){ finishedHandled[key]=1; if(won) me.wins=(me.wins||0)+1; else me.losses=(me.losses||0)+1; save(); renderProfile(); }
   } else {
-    o.innerHTML=`<div class="card"><span class="label">Duelo ${S.round} de no máximo 3</span><h2>${wonRound?"Você venceu o duelo!":"Duelo perdido"}</h2>${score}<p style="margin:0">${S.score[me_]>S.score[op]?"Mais uma vitória fecha a série.":S.score[me_]<S.score[op]?"Vença o próximo para empatar a série.":"Série empatada: o próximo duelo decide."} As combinações de cristais continuam as mesmas.</p><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn" id="eoView">Ver tabuleiro</button><button class="btn primary" id="eoNext">Próximo duelo</button></div></div>`;
+    o.innerHTML=`<div class="card"><span class="label">Duelo ${S.round} de no máximo 3</span><h2>${wonRound?"Duelo vencido!":"Duelo perdido"}</h2>${score}${vs}<p style="margin:0">${S.score[mt]>S.score[ot]?"Mais uma vitória fecha a série.":S.score[mt]<S.score[ot]?"Vença o próximo para empatar a série.":"Série empatada: o próximo duelo decide."} As combinações de cristais continuam as mesmas.</p><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn" id="eoView">Ver tabuleiro</button><button class="btn primary" id="eoNext">Próximo duelo</button></div></div>`;
   }
   o.hidden=false;
   const b=$("#eoBack"); if(b) b.onclick=()=>{ o.hidden=true; $("#gBack").click(); };
-  const n=$("#eoNext"); if(n) n.onclick=()=>{ if(G.net&&!NET.connected) return toast("Sem conexão com o oponente."); nextRound(); };
+  const n=$("#eoNext"); if(n) n.onclick=()=>{ if(G.net&&!netOk()) return toast("Sem conexão com os outros jogadores."); nextRound(); };
   $("#eoView").onclick=()=>o.hidden=true;
 }
 setInterval(()=>{
   if(!G||$("#scr-game").hidden) return; renderClock();
-  if(G.status!=="playing"||!mySide) return; if(G.net && !NET.connected) return;
+  if(G.status!=="playing"||!mySide||busy) return; if(G.net && !netOk()) return;
   const now=gnow(), tn=G.turnNo, key=G.roomId+":"+G.series.round+":"+tn;
-  const late = G.turn===mySide ? now>G.turnEndsAt : now>G.turnEndsAt+5000;
-  if(late && !timeoutSent[key]){ timeoutSent[key]=1; commit((g,n)=>{ if(g.turnNo!==tn||g.status!=="playing") return false; endTurn(g,n,"tempo"); }); }
+  const mine = G.turn===mySide, aiTurnNow = G.ai && G.turn==="p2";
+  // pergaminho de feitiço: quem está jogando (ou a IA) coloca no tabuleiro
+  if(now>=G.spellNext && (mine||aiTurnNow)){ commit((g,n)=>{ if(n<g.spellNext||g.status!=="playing") return false; spawnSpell(g,n); }); return; }
+  const late = mine ? now>G.turnEndsAt : now>G.turnEndsAt+5000;
+  const iDecide = mine || !G.net || G.mode==="1x1" || NET.role==="host";
+  if(late && iDecide && !timeoutSent[key]){ timeoutSent[key]=1; commit((g,n)=>{ if(g.turnNo!==tn||g.status!=="playing") return false; endTurn(g,n,"tempo"); }); }
 },500);
-setInterval(()=>{ if(G && !$("#scr-game").hidden){ renderBoard(); renderCards(); if(selScroll!=null) renderExplain(); } },1000);
+setInterval(()=>{ if(G && !$("#scr-game").hidden){ renderBoard(); renderCards(); renderExplain(); } },1000);
 
 /*@@GAME_CORE@@*/
 
@@ -531,5 +574,5 @@ setInterval(()=>{ if(G && !$("#scr-game").hidden){ renderBoard(); renderCards();
   await loadStore();
   if(STORE.session && STORE.accounts[STORE.session]) enter(STORE.accounts[STORE.session]);
   if(!NATIVE) console.info("Tabuleiro Mágico: modo navegador — a conexão é simulada entre abas.");
-  if(!NATIVE) window.__tm = { G:()=>G, commit, endRound, cdLeft, gnow, myArsenal };
+  if(!NATIVE) window.__tm = { G:()=>G, commit, endRound, cdLeft, pieceCd, gnow, myArsenal };
 })();

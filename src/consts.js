@@ -20,7 +20,7 @@ const ELEMENTS = {
 
 /* Regras fixas: iguais para todos os duelistas. */
 const RULES = {
-  manaBase:100, nucleoVidaBase:100, manaPorTurno:5, custoCristal:1,
+  manaBase:200, nucleoVidaBase:100, nucleoAndar:6, feiticoMin:5, manaPorTurno:5, custoCristal:1,
   bonusElemento:2, bonusVantagem:2, bonusCampo:2, curaValor:6,
   armadilhaDano:4, armadilhaDuracao:300, estruturaVida:15, seloVida:4,
   recManaQtd:2, recManaSeg:60, recVidaQtd:2, recVidaMin:2,
@@ -67,7 +67,19 @@ function randomArsenal(){
     if(pl.p[a.k]<a.maxP){ pl.p[a.k]++; left--; } }
   return out;
 }
+/* ---- times e posições (1x1 e 2x2) ---- */
+const TEAM = {p1:"A",p2:"B",p3:"A",p4:"B"};
+const SIDES = {"1x1":["p1","p2"],"2x2":["p1","p2","p3","p4"]};
+const MAX_PLATES_2X2 = 7;
+function layoutFor(mode, side){
+  if(mode!=="2x2"){ const row=r=>side==="p1"?r:7-r; return {core:[row(CORE_POS[0]),CORE_POS[1]], slots:SLOTS.map(([r,c])=>[row(r),c])}; }
+  const left = side==="p1"||side==="p4", row=r=>TEAM[side]==="A"?r:7-r, mir=([r,c])=>[r,7-c];
+  const L={core:[0,1],slots:[[0,0],[0,2],[0,3],[1,0],[1,1],[1,2],[1,3]]};
+  const B = left ? L : {core:mir(L.core),slots:L.slots.map(mir)};
+  return {core:[row(B.core[0]),B.core[1]], slots:B.slots.map(([r,c])=>[row(r),c])};
+}
 const pname = p => p.type==="nucleo" ? "Núcleo Mágico" : (p.name || `Placa ${p.plate+1}`);
+const TARGET_TXT = {ownPiece:"uma placa sua", ownTomb:"uma lápide sua", emptyNearOwn:"uma casa vazia perto das suas placas", enemyNearOwn:"uma placa inimiga perto das suas", none:"ativa na hora", field:"o tabuleiro inteiro"};
 
 /* ---- efeitos dos pergaminhos ---- */
 const EFFECTS = {
